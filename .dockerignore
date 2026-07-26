@@ -1,0 +1,12 @@
+.git
+.gitignore
+node_modules
+dist
+.next
+.vinext
+coverage
+playwright-report
+test-results
+*.log
+*.tsbuildinfo
+.DS_Store
