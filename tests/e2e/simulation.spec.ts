@@ -32,6 +32,24 @@ test("modifie un paramètre et applique le préréglage Terre", async ({ page })
   await expect(gravity).toHaveValue("9.81");
 });
 
+test("compare la chute avec l'air et dans le vide", async ({ page }) => {
+  await page.goto("/");
+  await waitForHydration(page);
+  const airResistance = page.getByRole("checkbox", {
+    name: "Résistance de l’air",
+  });
+
+  await expect(airResistance).toBeChecked();
+  const impactReadout = page.locator(".metric-card").first();
+  await expect(impactReadout.getByText("LÂCHÉE")).toBeVisible();
+  await expect(impactReadout.getByText("LANCÉE")).toBeVisible();
+  await expect(page.getByText(/Écart entre les impacts/)).toBeVisible();
+
+  await airResistance.uncheck();
+  await expect(page.getByText("Impact simultané dans le vide")).toBeVisible();
+  await expect(page.getByText("MODÈLE : VIDE PARFAIT")).toBeVisible();
+});
+
 test("réduit les éléments illustratifs quand la portée augmente", async ({ page }) => {
   await page.goto("/");
   await waitForHydration(page);

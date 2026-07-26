@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import {
   DEFAULT_PARAMETERS,
-  impactTime,
+  impactDistance,
   sampleSimulation,
   trajectorySamples,
   type SimulationParameters,
@@ -18,7 +18,7 @@ type Props = {
 type Point = { x: number; y: number };
 
 const DEFAULT_IMPACT_DISTANCE =
-  DEFAULT_PARAMETERS.horizontalSpeed * impactTime(DEFAULT_PARAMETERS);
+  impactDistance(DEFAULT_PARAMETERS);
 const MAX_VISIBLE_HEIGHT = 100;
 const MIN_ILLUSTRATION_SCALE = 0.45;
 
@@ -90,7 +90,7 @@ function paintScene(
     1 / camera.zoom,
   );
   const maxDistance = Math.max(
-    parameters.horizontalSpeed * impactTime(parameters),
+    impactDistance(parameters),
     12,
   );
   const scaleY = (groundY - topY) / MAX_VISIBLE_HEIGHT;
@@ -152,7 +152,7 @@ function paintScene(
       Math.min(58, 18 + current.launched.vx * 1.25),
       0,
       COLORS.blue,
-      `vₓ = ${parameters.horizontalSpeed.toFixed(0)} m/s`,
+      `vₓ = ${current.launched.vx.toFixed(1)} m/s`,
       "above",
       illustrationScale,
     );
@@ -163,14 +163,16 @@ function paintScene(
       0,
       Math.min(66, 15 + current.dropped.vy * 1.15),
       COLORS.violet,
-      "g",
+      `vᵧ = ${current.dropped.vy.toFixed(1)} m/s`,
       "left",
       illustrationScale,
     );
   }
 
-  if (runState === "finished") {
+  if (current.droppedImpacted) {
     drawImpact(ctx, dropped.x, groundY, COLORS.orange, illustrationScale);
+  }
+  if (current.launchedImpacted) {
     drawImpact(ctx, launched.x, groundY, COLORS.blue, illustrationScale);
   }
 
@@ -224,7 +226,7 @@ function paintScene(
  * The tower itself uses the fixed vertical metre scale above.
  */
 export function getCamera(parameters: SimulationParameters) {
-  const distance = parameters.horizontalSpeed * impactTime(parameters);
+  const distance = impactDistance(parameters);
   const zoom = Math.max(1, distance / DEFAULT_IMPACT_DISTANCE);
 
   return {

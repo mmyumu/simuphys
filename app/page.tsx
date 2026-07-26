@@ -8,17 +8,25 @@ import {
   RotateCcw,
   Sparkles,
   Timer,
+  Wind,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ExperimentCanvas } from "@/components/ExperimentCanvas";
 import {
+  BALL,
   DEFAULT_PARAMETERS,
-  impactTime,
+  impactTimes,
+  reynoldsNumber,
   sampleSimulation,
+  sphereDragCoefficient,
   type SimulationParameters,
 } from "@/lib/physics";
 
 type RunState = "idle" | "running" | "paused" | "finished";
+type NumericParameter = Exclude<
+  keyof SimulationParameters,
+  "airResistance"
+>;
 
 function formatValue(value: number, digits = 1) {
   return value.toLocaleString("fr-FR", {
@@ -36,11 +44,16 @@ export default function Home() {
   const [speed, setSpeed] = useState(1);
   const rafRef = useRef<number | null>(null);
   const lastFrameRef = useRef<number | null>(null);
-  const duration = useMemo(() => impactTime(parameters), [parameters]);
+  const impacts = useMemo(() => impactTimes(parameters), [parameters]);
+  const duration = Math.max(impacts.dropped, impacts.launched);
   const sample = useMemo(
     () => sampleSimulation(parameters, time),
     [parameters, time],
   );
+  const currentSpeed = Math.hypot(sample.launched.vx, sample.launched.vy);
+  const currentReynolds = reynoldsNumber(currentSpeed);
+  const currentCd = sphereDragCoefficient(currentReynolds);
+  const impactGap = Math.abs(impacts.launched - impacts.dropped);
 
   useEffect(() => {
     setHydrated(true);
@@ -89,7 +102,7 @@ export default function Home() {
   };
 
   const updateParameter = (
-    key: keyof SimulationParameters,
+    key: NumericParameter,
     value: number,
   ) => {
     setParameters((current) => ({ ...current, [key]: value }));
@@ -131,10 +144,22 @@ export default function Home() {
             et observe ce que la gravité leur réserve.
           </p>
         </div>
-        <div className="formula-card" aria-label="Équation de la chute">
-          <span>POSITION VERTICALE</span>
+        <div className="formula-card" aria-label="Équation du mouvement">
+          <span>
+            {parameters.airResistance
+              ? "TRAÎNÉE AÉRODYNAMIQUE"
+              : "POSITION VERTICALE"}
+          </span>
           <strong>
-            y(t) = h − <span>½gt²</span>
+            {parameters.airResistance ? (
+              <>
+                F<sub>d</sub> = <span>½ρC<sub>d</sub>(Re)Av²</span>
+              </>
+            ) : (
+              <>
+                y(t) = h − <span>½gt²</span>
+              </>
+            )}
           </strong>
         </div>
       </section>
@@ -170,7 +195,7 @@ export default function Home() {
           <div className="timeline">
             <div className="timeline-labels">
               <span>t = {formatValue(time, 2)} s</span>
-              <span>impact prévu : {formatValue(duration, 2)} s</span>
+              <span>dernier impact : {formatValue(duration, 2)} s</span>
             </div>
             <div className="timeline-track">
               <div
@@ -230,6 +255,29 @@ export default function Home() {
           </div>
 
           <div className="control-list">
+            <label className="air-toggle">
+              <span>
+                <Wind size={17} aria-hidden="true" />
+                <span>
+                  <strong>Résistance de l’air</strong>
+                  <small>
+                    Sphère lisse • C<sub>d</sub> variable
+                  </small>
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={parameters.airResistance}
+                aria-label="Résistance de l’air"
+                onChange={(event) => {
+                  setParameters((current) => ({
+                    ...current,
+                    airResistance: event.target.checked,
+                  }));
+                  reset();
+                }}
+              />
+            </label>
             <RangeControl
               label="Hauteur de départ"
               value={parameters.height}
@@ -263,6 +311,19 @@ export default function Home() {
             />
           </div>
 
+          <div className="ball-preset">
+            <p>BALLE FIXE</p>
+            <strong>{BALL.name}</strong>
+            <span>Ø 40 mm • 2,7 g • surface lisse</span>
+            {parameters.airResistance && (
+              <span>
+                C<sub>d</sub> actuel : {formatValue(currentCd, 3)}
+                {" • "}Re :{" "}
+                {Math.round(currentReynolds).toLocaleString("fr-FR")}
+              </span>
+            )}
+          </div>
+
           <button
             className="earth-preset"
             onClick={() => {
@@ -290,29 +351,49 @@ export default function Home() {
       </section>
 
       <section className="readouts">
-        <article>
-          <span className="readout-icon orange"><Timer size={20} /></span>
-          <div>
-            <p>TEMPS DE CHUTE</p>
-            <strong>{formatValue(duration, 2)} <small>s</small></strong>
+        <article className="metric-card">
+          <div className="metric-heading">
+            <span className="readout-icon orange"><Timer size={20} /></span>
+            <p>TEMPS D’IMPACT</p>
           </div>
-          <span className="readout-note">Identique pour les deux balles</span>
+          <MetricPair
+            dropped={formatValue(impacts.dropped, 2)}
+            launched={formatValue(impacts.launched, 2)}
+            unit="s"
+          />
+          <span className="metric-note">
+            {parameters.airResistance
+              ? `Écart entre les impacts : ${formatValue(impactGap, 2)} s`
+              : "Impact simultané dans le vide"}
+          </span>
         </article>
-        <article>
-          <span className="readout-icon blue">↗</span>
-          <div>
+        <article className="metric-card">
+          <div className="metric-heading">
+            <span className="readout-icon blue">↗</span>
             <p>DISTANCE HORIZONTALE</p>
-            <strong>{formatValue(sample.launched.x)} <small>m</small></strong>
           </div>
-          <span className="readout-note">Balle lancée à l’instant t</span>
+          <MetricPair
+            dropped={formatValue(sample.dropped.x)}
+            launched={formatValue(sample.launched.x)}
+            unit="m"
+          />
+          <span className="metric-note">Position à l’instant t</span>
         </article>
-        <article>
-          <span className="readout-icon violet">↓</span>
-          <div>
+        <article className="metric-card">
+          <div className="metric-heading">
+            <span className="readout-icon violet">↓</span>
             <p>VITESSE VERTICALE</p>
-            <strong>{formatValue(sample.dropped.vy)} <small>m/s</small></strong>
           </div>
-          <span className="readout-note">Même valeur pour les deux</span>
+          <MetricPair
+            dropped={formatValue(sample.dropped.vy)}
+            launched={formatValue(sample.launched.vy)}
+            unit="m/s"
+          />
+          <span className="metric-note">
+            {parameters.airResistance
+              ? "La traînée dépend de la vitesse totale"
+              : "Valeurs identiques dans le vide"}
+          </span>
         </article>
       </section>
 
@@ -320,10 +401,15 @@ export default function Home() {
         <span className="insight-mark">!</span>
         <div>
           <p>À RETENIR</p>
-          <h2>Le mouvement horizontal ne ralentit pas la chute.</h2>
+          <h2>
+            {parameters.airResistance
+              ? "L’air sépare les deux mouvements."
+              : "Le mouvement horizontal ne ralentit pas la chute."}
+          </h2>
           <span>
-            Dans le vide, la gravité agit de la même façon sur les deux balles.
-            Elles touchent donc le sol exactement au même instant.
+            {parameters.airResistance
+              ? `La balle lancée rencontre plus de traînée car sa vitesse totale est plus grande. Elle arrive ${formatValue(impactGap, 2)} s après la balle lâchée.`
+              : "Dans le vide, la gravité agit de la même façon sur les deux balles. Elles touchent donc le sol exactement au même instant."}
           </span>
         </div>
         <div className="mini-diagram" aria-hidden="true">
@@ -338,9 +424,32 @@ export default function Home() {
 
       <footer>
         <span>FallSim • Une expérience de mécanique classique</span>
-        <span>MODÈLE : VIDE PARFAIT</span>
+        <span>
+          MODÈLE : {parameters.airResistance ? "AIR • Cᴅ(Re)" : "VIDE PARFAIT"}
+        </span>
       </footer>
     </main>
+  );
+}
+
+type MetricPairProps = {
+  dropped: string;
+  launched: string;
+  unit: string;
+};
+
+function MetricPair({ dropped, launched, unit }: MetricPairProps) {
+  return (
+    <div className="metric-pair">
+      <div className="ball-metric metric-dropped">
+        <span><i className="ball ball-orange" /> LÂCHÉE</span>
+        <strong>{dropped} <small>{unit}</small></strong>
+      </div>
+      <div className="ball-metric metric-launched">
+        <span><i className="ball ball-blue" /> LANCÉE</span>
+        <strong>{launched} <small>{unit}</small></strong>
+      </div>
+    </div>
   );
 }
 

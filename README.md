@@ -1,8 +1,13 @@
 # FallSim
 
 Simulateur pédagogique interactif de chute libre. Une balle est lâchée, une
-autre est lancée horizontalement : dans le vide, elles atteignent le sol au
-même instant.
+autre est lancée horizontalement. Un interrupteur permet de comparer le vide
+à un modèle atmosphérique.
+
+Le modèle avec air utilise une sphère creuse lisse en ABS de 40 mm et 2,7 g.
+La traînée est intégrée numériquement avec RK4. Son coefficient varie avec le
+nombre de Reynolds selon la corrélation de Brown–Lawler, valable dans la plage
+de vitesses couverte par l’expérience. La rugosité de surface est fixe.
 
 ## Développement
 
