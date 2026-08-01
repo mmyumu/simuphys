@@ -5,6 +5,13 @@ export const metadata: Metadata = {
   title: "FallSim — Laboratoire de chute libre",
   description:
     "Une expérience interactive pour comprendre la chute libre et le mouvement horizontal.",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
+    ],
+    apple: { url: "/apple-touch-icon.png", sizes: "180x180" },
+  },
 };
 
 export default function RootLayout({
