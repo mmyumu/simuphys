@@ -117,6 +117,18 @@ export default function Home() {
     reset();
   };
 
+  const seekTo = (nextTime: number) => {
+    const clampedTime = Math.min(Math.max(nextTime, 0), duration);
+    setTime(clampedTime);
+    setRunState(
+      clampedTime === 0
+        ? "idle"
+        : clampedTime >= duration
+          ? "finished"
+          : "paused",
+    );
+  };
+
   const progress = duration === 0 ? 0 : time / duration;
   const isRunning = runState === "running";
 
@@ -205,16 +217,20 @@ export default function Home() {
               <span>t = {formatValue(time, 2)} s</span>
               <span>dernier impact : {formatValue(duration, 2)} s</span>
             </div>
-            <div className="timeline-track">
-              <div
-                className="timeline-fill"
-                style={{ width: `${progress * 100}%` }}
-              />
-              <div
-                className="timeline-thumb"
-                style={{ left: `${progress * 100}%` }}
-              />
-            </div>
+            <input
+              className="timeline-track"
+              type="range"
+              min={0}
+              max={duration}
+              step={0.01}
+              value={time}
+              aria-label="Position dans l’expérience"
+              aria-valuetext={`${formatValue(time, 2)} secondes`}
+              style={
+                { "--range-progress": `${progress * 100}%` } as React.CSSProperties
+              }
+              onChange={(event) => seekTo(Number(event.target.value))}
+            />
           </div>
 
           <div className="transport">

@@ -34,6 +34,26 @@ test("lance, met en pause et réinitialise l'expérience", async ({ page }) => {
   await expect(page.getByText("t = 0,00 s")).toBeVisible();
 });
 
+test("déplace l'expérience depuis la barre temporelle", async ({ page }) => {
+  await page.goto("/");
+  await waitForHydration(page);
+
+  const timeline = page.getByRole("slider", {
+    name: "Position dans l’expérience",
+  });
+  const duration = Number(await timeline.getAttribute("max"));
+  const targetTime = Math.round((duration / 2) * 100) / 100;
+
+  await page.getByRole("button", { name: "Lancer l’expérience" }).click();
+  await timeline.fill(String(targetTime));
+
+  await expect(timeline).toHaveValue(String(targetTime));
+  await expect(page.getByText("En pause")).toBeVisible();
+  await expect(
+    page.getByText(`t = ${targetTime.toFixed(2).replace(".", ",")} s`),
+  ).toBeVisible();
+});
+
 test("modifie un paramètre et applique le préréglage Terre", async ({ page }) => {
   await page.goto("/");
   await waitForHydration(page);
