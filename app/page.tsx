@@ -56,6 +56,8 @@ export default function Home() {
   const currentCd = sphereDragCoefficient(currentReynolds);
   const impactGap = Math.abs(impacts.launched - impacts.dropped);
   const isHorizontalLaunch = parameters.launchAngle === 0;
+  const isUpwardLaunch = parameters.launchAngle > 0;
+  const launchedArrivesLater = impacts.launched > impacts.dropped;
   const elapsedTimes = {
     dropped: Math.min(time, impacts.dropped),
     launched: Math.min(time, impacts.launched),
@@ -308,8 +310,8 @@ export default function Home() {
             <RangeControl
               label="Angle de lancement"
               value={parameters.launchAngle}
-              min={0}
-              max={75}
+              min={-90}
+              max={90}
               step={1}
               unit="°"
               color="blue"
@@ -434,14 +436,18 @@ export default function Home() {
               ? "L’air sépare les deux mouvements."
               : isHorizontalLaunch
                 ? "Le mouvement horizontal ne ralentit pas la chute."
-                : "L’angle prolonge le temps de vol."}
+                : isUpwardLaunch
+                  ? "L’angle prolonge le temps de vol."
+                  : "Le tir vers le bas raccourcit le vol."}
           </h2>
           <span>
             {parameters.airResistance
-              ? `La balle lancée rencontre plus de traînée car sa vitesse totale est plus grande. Elle arrive ${formatValue(impactGap, 2)} s après la balle lâchée.`
+              ? `La balle lancée rencontre plus de traînée car sa vitesse totale est plus grande. Elle arrive ${formatValue(impactGap, 2)} s ${launchedArrivesLater ? "après" : "avant"} la balle lâchée.`
               : isHorizontalLaunch
                 ? "Dans le vide, la gravité agit de la même façon sur les deux balles. Elles touchent donc le sol exactement au même instant."
-                : `La composante verticale initiale fait d’abord monter la balle lancée à ${formatValue(parameters.launchAngle, 0)}°, avant que la gravité ne la ramène au sol.`}
+                : isUpwardLaunch
+                  ? `La composante verticale initiale fait d’abord monter la balle lancée à ${formatValue(parameters.launchAngle, 0)}°, avant que la gravité ne la ramène au sol.`
+                  : `À ${formatValue(parameters.launchAngle, 0)}°, la composante verticale initiale dirige immédiatement la balle vers le sol.`}
           </span>
         </div>
         <div className="mini-diagram" aria-hidden="true">
@@ -615,12 +621,14 @@ function FormulaBreakdown({
             <div className="equation-list">
               <code>
                 y(t) = {formatValue(parameters.height, 0)}
-                {" + "}{formatValue(initialUpwardSpeed, 2)}t
+                {initialUpwardSpeed >= 0 ? " + " : " − "}
+                {formatValue(Math.abs(initialUpwardSpeed), 2)}t
                 {" − "}{formatValue(halfGravity, 3)}t²
               </code>
               <code>
                 v<sub>y</sub>(t) = {formatValue(parameters.gravity, 2)}t
-                {" − "}{formatValue(initialUpwardSpeed, 2)}
+                {initialUpwardSpeed >= 0 ? " − " : " + "}
+                {formatValue(Math.abs(initialUpwardSpeed), 2)}
               </code>
               <code>
                 x<sub>lancée</sub>(t) =
@@ -638,7 +646,9 @@ function FormulaBreakdown({
             <span>
               {parameters.launchAngle === 0
                 ? "À 0°, les deux balles ont la même position et la même vitesse verticales à chaque instant."
-                : "La composante v₀ sin(θ) donne à la balle lancée une vitesse initiale vers le haut."}
+                : parameters.launchAngle > 0
+                  ? "La composante v₀ sin(θ) donne à la balle lancée une vitesse initiale vers le haut."
+                  : "La composante v₀ sin(θ), négative, donne à la balle une vitesse initiale vers le sol."}
             </span>
           </article>
         </div>

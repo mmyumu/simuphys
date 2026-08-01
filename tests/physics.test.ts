@@ -50,6 +50,34 @@ describe("moteur de chute libre", () => {
     expect(afterDroppedImpact.launched.y).toBeGreaterThan(0);
   });
 
+  it("raccourcit le vol quand la balle est lancée vers le bas", () => {
+    const downward = {
+      ...VACUUM_PARAMETERS,
+      launchAngle: -45,
+    };
+    const sample = sampleSimulation(downward, 0);
+
+    expect(sample.launched.vx).toBeCloseTo(12 / Math.sqrt(2), 6);
+    expect(sample.launched.vy).toBeCloseTo(12 / Math.sqrt(2), 6);
+    expect(impactTimes(downward).launched).toBeLessThan(
+      impactTimes(downward).dropped,
+    );
+  });
+
+  it("gère les lancements verticaux aux deux bornes", () => {
+    const downward = { ...VACUUM_PARAMETERS, launchAngle: -90 };
+    const upward = { ...VACUUM_PARAMETERS, launchAngle: 90 };
+
+    expect(sampleSimulation(downward, 0).launched.vx).toBeCloseTo(0, 10);
+    expect(sampleSimulation(upward, 0).launched.vx).toBeCloseTo(0, 10);
+    expect(impactTimes(downward).launched).toBeLessThan(
+      impactTimes(VACUUM_PARAMETERS).launched,
+    );
+    expect(impactTimes(upward).launched).toBeGreaterThan(
+      impactTimes(VACUUM_PARAMETERS).launched,
+    );
+  });
+
   it("donne la même position et vitesse verticales aux deux balles", () => {
     const sample = sampleSimulation(VACUUM_PARAMETERS, 2);
     expect(sample.dropped.y).toBe(sample.launched.y);

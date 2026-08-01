@@ -297,11 +297,11 @@ function drawLaunchAngleIndicator(
   ctx.closePath();
   ctx.fill();
 
-  if (angleDegrees > 0) {
+  if (angleDegrees !== 0) {
     ctx.globalAlpha = 0.75;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.arc(0, 0, arcRadius, 0, -angle, true);
+    ctx.arc(0, 0, arcRadius, 0, -angle, angleDegrees > 0);
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
@@ -330,7 +330,10 @@ function drawLaunchAngleIndicator(
 export function getCamera(parameters: SimulationParameters) {
   const distance = impactDistance(parameters);
   const angle = (parameters.launchAngle * Math.PI) / 180;
-  const upwardSpeed = parameters.horizontalSpeed * Math.sin(angle);
+  const upwardSpeed = Math.max(
+    0,
+    parameters.horizontalSpeed * Math.sin(angle),
+  );
   const vacuumApex =
     parameters.height + upwardSpeed ** 2 / (2 * parameters.gravity);
   const maxDistance = Math.max(8, distance * 1.12);

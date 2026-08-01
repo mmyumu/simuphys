@@ -44,9 +44,12 @@ test("modifie un paramètre et applique le préréglage Terre", async ({ page })
   const canvas = page.locator(
     'canvas[aria-label="Animation des deux balles en chute libre"]',
   );
-  await launchAngle.fill("45");
-  await expect(launchAngle).toHaveValue("45");
-  await expect(canvas).toHaveAttribute("data-launch-angle", "45");
+  await launchAngle.fill("-90");
+  await expect(launchAngle).toHaveValue("-90");
+  await expect(canvas).toHaveAttribute("data-launch-angle", "-90");
+  await launchAngle.fill("90");
+  await expect(launchAngle).toHaveValue("90");
+  await expect(canvas).toHaveAttribute("data-launch-angle", "90");
   await expect(canvas).toHaveAttribute("data-camera-mode", "isotropic");
   await gravity.fill("3.7");
   await expect(gravity).toHaveValue("3.7");
