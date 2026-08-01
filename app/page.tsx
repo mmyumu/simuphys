@@ -13,6 +13,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ExperimentCanvas } from "@/components/ExperimentCanvas";
 import {
+  AIR,
   BALL,
   DEFAULT_PARAMETERS,
   impactTimes,
@@ -54,6 +55,11 @@ export default function Home() {
   const currentReynolds = reynoldsNumber(currentSpeed);
   const currentCd = sphereDragCoefficient(currentReynolds);
   const impactGap = Math.abs(impacts.launched - impacts.dropped);
+  const isHorizontalLaunch = parameters.launchAngle === 0;
+  const elapsedTimes = {
+    dropped: Math.min(time, impacts.dropped),
+    launched: Math.min(time, impacts.launched),
+  };
 
   useEffect(() => {
     setHydrated(true);
@@ -140,8 +146,8 @@ export default function Home() {
           </p>
           <h1>Deux balles. Une seule gravité.</h1>
           <p className="intro-copy">
-            L’une tombe droit, l’autre file à l’horizontale. Lance l’expérience
-            et observe ce que la gravité leur réserve.
+            L’une tombe droit, l’autre part selon l’angle que tu choisis.
+            Lance l’expérience et observe ce que la gravité leur réserve.
           </p>
         </div>
         <div className="formula-card" aria-label="Équation du mouvement">
@@ -157,7 +163,7 @@ export default function Home() {
               </>
             ) : (
               <>
-                y(t) = h − <span>½gt²</span>
+                y(t) = h + v₀sinθt − <span>½gt²</span>
               </>
             )}
           </strong>
@@ -288,7 +294,7 @@ export default function Home() {
               onChange={(value) => updateParameter("height", value)}
             />
             <RangeControl
-              label="Vitesse horizontale"
+              label="Vitesse de lancement"
               value={parameters.horizontalSpeed}
               min={2}
               max={30}
@@ -298,6 +304,16 @@ export default function Home() {
               onChange={(value) =>
                 updateParameter("horizontalSpeed", value)
               }
+            />
+            <RangeControl
+              label="Angle de lancement"
+              value={parameters.launchAngle}
+              min={0}
+              max={75}
+              step={1}
+              unit="°"
+              color="blue"
+              onChange={(value) => updateParameter("launchAngle", value)}
             />
             <RangeControl
               label="Gravité"
@@ -354,17 +370,19 @@ export default function Home() {
         <article className="metric-card">
           <div className="metric-heading">
             <span className="readout-icon orange"><Timer size={20} /></span>
-            <p>TEMPS D’IMPACT</p>
+            <p>TEMPS ÉCOULÉ</p>
           </div>
           <MetricPair
-            dropped={formatValue(impacts.dropped, 2)}
-            launched={formatValue(impacts.launched, 2)}
+            dropped={formatValue(elapsedTimes.dropped, 2)}
+            launched={formatValue(elapsedTimes.launched, 2)}
             unit="s"
           />
           <span className="metric-note">
             {parameters.airResistance
               ? `Écart entre les impacts : ${formatValue(impactGap, 2)} s`
-              : "Impact simultané dans le vide"}
+              : isHorizontalLaunch
+                ? "Impact simultané dans le vide"
+                : `Le tir incliné reste en vol ${formatValue(impactGap, 2)} s de plus`}
           </span>
         </article>
         <article className="metric-card">
@@ -397,6 +415,16 @@ export default function Home() {
         </article>
       </section>
 
+      <FormulaBreakdown
+        parameters={parameters}
+        time={time}
+        sample={sample}
+        impactTime={impacts.launched}
+        speed={currentSpeed}
+        reynolds={currentReynolds}
+        dragCoefficient={currentCd}
+      />
+
       <section className="insight">
         <span className="insight-mark">!</span>
         <div>
@@ -404,12 +432,16 @@ export default function Home() {
           <h2>
             {parameters.airResistance
               ? "L’air sépare les deux mouvements."
-              : "Le mouvement horizontal ne ralentit pas la chute."}
+              : isHorizontalLaunch
+                ? "Le mouvement horizontal ne ralentit pas la chute."
+                : "L’angle prolonge le temps de vol."}
           </h2>
           <span>
             {parameters.airResistance
               ? `La balle lancée rencontre plus de traînée car sa vitesse totale est plus grande. Elle arrive ${formatValue(impactGap, 2)} s après la balle lâchée.`
-              : "Dans le vide, la gravité agit de la même façon sur les deux balles. Elles touchent donc le sol exactement au même instant."}
+              : isHorizontalLaunch
+                ? "Dans le vide, la gravité agit de la même façon sur les deux balles. Elles touchent donc le sol exactement au même instant."
+                : `La composante verticale initiale fait d’abord monter la balle lancée à ${formatValue(parameters.launchAngle, 0)}°, avant que la gravité ne la ramène au sol.`}
           </span>
         </div>
         <div className="mini-diagram" aria-hidden="true">
@@ -429,6 +461,189 @@ export default function Home() {
         </span>
       </footer>
     </main>
+  );
+}
+
+type FormulaBreakdownProps = {
+  parameters: SimulationParameters;
+  time: number;
+  sample: ReturnType<typeof sampleSimulation>;
+  impactTime: number;
+  speed: number;
+  reynolds: number;
+  dragCoefficient: number;
+};
+
+function FormulaBreakdown({
+  parameters,
+  time,
+  sample,
+  impactTime,
+  speed,
+  reynolds,
+  dragCoefficient,
+}: FormulaBreakdownProps) {
+  const area = Math.PI * (BALL.diameter / 2) ** 2;
+  const dragForce =
+    0.5 * AIR.density * dragCoefficient * area * speed ** 2;
+  const dragAcceleration = BALL.mass > 0 ? dragForce / BALL.mass : 0;
+  const horizontalDrag =
+    speed > 0 ? dragAcceleration * (sample.launched.vx / speed) : 0;
+  const verticalDrag =
+    speed > 0 ? dragAcceleration * (sample.launched.vy / speed) : 0;
+  const halfGravity = parameters.gravity / 2;
+  const angleRadians = (parameters.launchAngle * Math.PI) / 180;
+  const initialHorizontalSpeed =
+    parameters.horizontalSpeed * Math.cos(angleRadians);
+  const initialUpwardSpeed =
+    parameters.horizontalSpeed * Math.sin(angleRadians);
+
+  return (
+    <section
+      className="formula-breakdown"
+      aria-labelledby="formula-breakdown-title"
+    >
+      <div className="formula-heading">
+        <div>
+          <p>03 • MODÈLE MATHÉMATIQUE</p>
+          <h2 id="formula-breakdown-title">Les calculs de la simulation</h2>
+        </div>
+        <span className="model-badge">
+          {parameters.airResistance ? "AVEC RÉSISTANCE DE L’AIR" : "SANS AIR"}
+        </span>
+      </div>
+
+      <div className="parameter-strip" aria-label="Valeurs des paramètres">
+        <span><i>h</i> = {formatValue(parameters.height, 0)} m</span>
+        <span><i>v₀</i> = {formatValue(parameters.horizontalSpeed, 0)} m/s</span>
+        <span><i>θ</i> = {formatValue(parameters.launchAngle, 0)}°</span>
+        <span><i>g</i> = {formatValue(parameters.gravity, 2)} m/s²</span>
+        {parameters.airResistance && (
+          <>
+            <span><i>m</i> = {formatValue(BALL.mass * 1000, 1)} g</span>
+            <span><i>D</i> = {formatValue(BALL.diameter * 1000, 0)} mm</span>
+            <span><i>ρ</i> = {formatValue(AIR.density, 3)} kg/m³</span>
+          </>
+        )}
+      </div>
+
+      {parameters.airResistance ? (
+        <div className="formula-columns">
+          <article className="equation-card">
+            <p>FORMULES THÉORIQUES</p>
+            <div className="equation-list">
+              <code>v = √(v<sub>x</sub>² + v<sub>y</sub>²)</code>
+              <code>Re = ρvD / μ</code>
+              <code>
+                C<sub>d</sub>(Re) = 24/Re · (1 + 0,15Re<sup>0,681</sup>)
+                + 0,407 / (1 + 8710/Re)
+              </code>
+              <code>F<sub>d</sub> = ½ρC<sub>d</sub>Av²</code>
+              <code>
+                dx/dt = v<sub>x</sub> ; dy/dt = −v<sub>y</sub>
+              </code>
+              <code>
+                dv<sub>x</sub>/dt = −(F<sub>d</sub>/m) · v<sub>x</sub>/v
+              </code>
+              <code>
+                dv<sub>y</sub>/dt = g − (F<sub>d</sub>/m) · v<sub>y</sub>/v
+              </code>
+            </div>
+            <span>
+              A = π(D/2)². Ce système sans solution fermée simple est intégré
+              par RK4 avec un pas de 1/240 s.
+            </span>
+          </article>
+
+          <article className="equation-card equation-card-values">
+            <p>VALEURS INSTANTANÉES • BALLE LANCÉE • {formatValue(time, 2)} s</p>
+            <div className="equation-list">
+              <code>
+                A = π × ({formatValue(BALL.diameter, 3)}/2)²
+                = {formatValue(area, 6)} m²
+              </code>
+              <code>
+                v = √({formatValue(sample.launched.vx, 2)}² +
+                {formatValue(sample.launched.vy, 2)}²)
+                = {formatValue(speed, 2)} m/s
+              </code>
+              <code>
+                Re = ({formatValue(AIR.density, 3)} × {formatValue(speed, 2)}
+                × {formatValue(BALL.diameter, 3)}) / 0,0000181
+                = {Math.round(reynolds).toLocaleString("fr-FR")}
+              </code>
+              <code>
+                C<sub>d</sub> = {formatValue(dragCoefficient, 3)}
+                {" ; "}F<sub>d</sub> = {formatValue(dragForce, 4)} N
+              </code>
+              <code>
+                dv<sub>x</sub>/dt = −{formatValue(horizontalDrag, 2)} m/s²
+              </code>
+              <code>
+                dv<sub>y</sub>/dt = {formatValue(parameters.gravity, 2)}
+                {" − "}{formatValue(verticalDrag, 2)}
+                {" = "}{formatValue(parameters.gravity - verticalDrag, 2)} m/s²
+              </code>
+            </div>
+            <span>
+              Les valeurs instantanées évoluent avec le temps, car C<sub>d</sub>
+              dépend lui-même de la vitesse via Reynolds.
+            </span>
+          </article>
+        </div>
+      ) : (
+        <div className="formula-columns">
+          <article className="equation-card">
+            <p>FORMULES THÉORIQUES</p>
+            <div className="equation-list">
+              <code>x(t) = v₀ cos(θ)t</code>
+              <code>y(t) = h + v₀ sin(θ)t − ½gt²</code>
+              <code>v<sub>y</sub>(t) = gt − v₀ sin(θ)</code>
+              <code>Balle lâchée : x(t) = 0 ; v<sub>x</sub> = 0</code>
+              <code>
+                t<sub>impact</sub> = (v₀ sin(θ) + √((v₀ sin(θ))² + 2gh)) / g
+              </code>
+            </div>
+            <span>
+              L’axe vertical est positif vers le haut, tandis que v<sub>y</sub>
+              est affichée comme une vitesse vers le bas.
+            </span>
+          </article>
+
+          <article className="equation-card equation-card-values">
+            <p>AVEC LES VALEURS DES PARAMÈTRES</p>
+            <div className="equation-list">
+              <code>
+                y(t) = {formatValue(parameters.height, 0)}
+                {" + "}{formatValue(initialUpwardSpeed, 2)}t
+                {" − "}{formatValue(halfGravity, 3)}t²
+              </code>
+              <code>
+                v<sub>y</sub>(t) = {formatValue(parameters.gravity, 2)}t
+                {" − "}{formatValue(initialUpwardSpeed, 2)}
+              </code>
+              <code>
+                x<sub>lancée</sub>(t) =
+                {" "}{formatValue(initialHorizontalSpeed, 2)}t
+              </code>
+              <code>
+                t<sub>impact lancée</sub> = {formatValue(impactTime, 2)} s
+              </code>
+              <code>
+                À l’instant {formatValue(time, 2)} s :
+                {" "}y = {formatValue(sample.launched.y, 2)} m,
+                {" "}x<sub>lancée</sub> = {formatValue(sample.launched.x, 2)} m
+              </code>
+            </div>
+            <span>
+              {parameters.launchAngle === 0
+                ? "À 0°, les deux balles ont la même position et la même vitesse verticales à chaque instant."
+                : "La composante v₀ sin(θ) donne à la balle lancée une vitesse initiale vers le haut."}
+            </span>
+          </article>
+        </div>
+      )}
+    </section>
   );
 }
 

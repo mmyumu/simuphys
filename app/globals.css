@@ -272,7 +272,7 @@ footer {
 
 .canvas-wrap {
   position: relative;
-  height: 455px;
+  aspect-ratio: 1.08 / 1;
   margin-top: 17px;
   overflow: hidden;
   border: 1px solid #dedbd4;
@@ -831,6 +831,114 @@ input[type="range"]::-moz-range-thumb {
   font-size: 8px;
 }
 
+.formula-breakdown {
+  margin-top: 16px;
+  padding: 25px 27px 27px;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(135deg, rgba(63, 118, 228, 0.045), transparent 45%),
+    rgba(255, 253, 248, 0.88);
+}
+
+.formula-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.formula-heading p,
+.equation-card > p {
+  margin: 0;
+  color: var(--muted);
+  font: 500 9px "DM Mono", monospace;
+  letter-spacing: 0.12em;
+}
+
+.formula-heading h2 {
+  margin: 5px 0 0;
+  font-size: 20px;
+  letter-spacing: -0.035em;
+}
+
+.model-badge {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  color: var(--blue);
+  border: 1px solid #b9caf0;
+  background: var(--blue-soft);
+  font: 500 8px "DM Mono", monospace;
+  letter-spacing: 0.08em;
+}
+
+.parameter-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 18px;
+}
+
+.parameter-strip span {
+  padding: 6px 9px;
+  color: #596273;
+  border: 1px solid #ddd8cf;
+  background: var(--white);
+  font: 500 9px "DM Mono", monospace;
+}
+
+.parameter-strip i {
+  color: var(--orange);
+  font-style: normal;
+}
+
+.formula-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.equation-card {
+  min-width: 0;
+  padding: 17px 18px;
+  border-top: 3px solid var(--ink);
+  background: var(--white);
+  box-shadow: 0 5px 18px rgba(38, 42, 52, 0.045);
+}
+
+.equation-card-values {
+  border-top-color: var(--orange);
+  background: #fffaf5;
+}
+
+.equation-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.equation-list code {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font: 500 12px/1.55 "DM Mono", monospace;
+}
+
+.equation-list sub,
+.equation-list sup {
+  font-size: 0.72em;
+}
+
+.equation-card > span {
+  display: block;
+  margin-top: 14px;
+  padding-top: 11px;
+  color: var(--muted);
+  border-top: 1px solid #e7e2d8;
+  font-size: 9px;
+  line-height: 1.6;
+}
+
 .insight {
   position: relative;
   display: grid;
@@ -961,6 +1069,10 @@ footer {
   .readout-note {
     display: none;
   }
+
+  .formula-columns {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -995,6 +1107,7 @@ footer {
   }
 
   .canvas-wrap {
+    aspect-ratio: auto;
     height: 390px;
   }
 
@@ -1018,6 +1131,19 @@ footer {
   .readouts article + article {
     border-left: 0;
     border-top: 1px solid var(--line);
+  }
+
+  .formula-breakdown {
+    padding: 21px 17px;
+  }
+
+  .formula-heading {
+    display: block;
+  }
+
+  .model-badge {
+    display: inline-block;
+    margin-top: 12px;
   }
 
   .insight {

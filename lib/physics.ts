@@ -1,6 +1,7 @@
 export type SimulationParameters = {
   height: number;
   horizontalSpeed: number;
+  launchAngle: number;
   gravity: number;
   airResistance: boolean;
 };
@@ -40,6 +41,7 @@ export const AIR = {
 export const DEFAULT_PARAMETERS: SimulationParameters = {
   height: 45,
   horizontalSpeed: 12,
+  launchAngle: 0,
   gravity: 9.81,
   airResistance: true,
 };
@@ -79,16 +81,31 @@ export function impactTimes(parameters: SimulationParameters): ImpactTimes {
     return { dropped: 0, launched: 0 };
   }
 
+  const launchVelocity = getLaunchVelocity(parameters);
+
   if (!parameters.airResistance) {
-    const time = Math.sqrt((2 * parameters.height) / parameters.gravity);
-    return { dropped: time, launched: time };
+    const dropped = Math.sqrt(
+      (2 * parameters.height) / parameters.gravity,
+    );
+    const launched =
+      (-launchVelocity.vy +
+        Math.sqrt(
+          launchVelocity.vy ** 2 +
+            2 * parameters.gravity * parameters.height,
+        )) /
+      parameters.gravity;
+    return { dropped, launched };
   }
 
   return {
-    dropped: integrateBall(parameters, 0, Number.POSITIVE_INFINITY).time,
+    dropped: integrateBall(
+      parameters,
+      { vx: 0, vy: 0 },
+      Number.POSITIVE_INFINITY,
+    ).time,
     launched: integrateBall(
       parameters,
-      parameters.horizontalSpeed,
+      launchVelocity,
       Number.POSITIVE_INFINITY,
     ).time,
   };
@@ -107,14 +124,17 @@ export function sampleSimulation(
   parameters: SimulationParameters,
   requestedTime: number,
 ): SimulationSample {
+  const launchVelocity = getLaunchVelocity(parameters);
+
   if (!hasValidEnvironment(parameters)) {
-    const state = initialState(Math.max(0, parameters.height), 0);
+    const state = initialState(Math.max(0, parameters.height), 0, 0);
     return {
       time: 0,
       dropped: state,
       launched: initialState(
         Math.max(0, parameters.height),
-        parameters.horizontalSpeed,
+        Number.isFinite(launchVelocity.vx) ? launchVelocity.vx : 0,
+        Number.isFinite(launchVelocity.vy) ? launchVelocity.vy : 0,
       ),
       droppedImpacted: true,
       launchedImpacted: true,
@@ -125,40 +145,43 @@ export function sampleSimulation(
   const time = Math.max(0, requestedTime);
 
   if (!parameters.airResistance) {
-    const endTime = Math.sqrt(
-      (2 * parameters.height) / parameters.gravity,
-    );
-    const clampedTime = Math.min(time, endTime);
-    const verticalPosition = Math.max(
-      0,
-      parameters.height -
-        0.5 * parameters.gravity * clampedTime * clampedTime,
-    );
-    const verticalSpeed = parameters.gravity * clampedTime;
-    const impacted = clampedTime >= endTime;
+    const impacts = impactTimes(parameters);
+    const droppedTime = Math.min(time, impacts.dropped);
+    const launchedTime = Math.min(time, impacts.launched);
+    const droppedImpacted = time >= impacts.dropped;
+    const launchedImpacted = time >= impacts.launched;
 
     return {
-      time: clampedTime,
+      time: Math.min(time, Math.max(impacts.dropped, impacts.launched)),
       dropped: {
         x: 0,
-        y: verticalPosition,
+        y: Math.max(
+          0,
+          parameters.height -
+            0.5 * parameters.gravity * droppedTime * droppedTime,
+        ),
         vx: 0,
-        vy: verticalSpeed,
+        vy: parameters.gravity * droppedTime,
       },
       launched: {
-        x: parameters.horizontalSpeed * clampedTime,
-        y: verticalPosition,
-        vx: parameters.horizontalSpeed,
-        vy: verticalSpeed,
+        x: launchVelocity.vx * launchedTime,
+        y: Math.max(
+          0,
+          parameters.height -
+            launchVelocity.vy * launchedTime -
+            0.5 * parameters.gravity * launchedTime * launchedTime,
+        ),
+        vx: launchVelocity.vx,
+        vy: launchVelocity.vy + parameters.gravity * launchedTime,
       },
-      droppedImpacted: impacted,
-      launchedImpacted: impacted,
-      hasImpacted: impacted,
+      droppedImpacted,
+      launchedImpacted,
+      hasImpacted: droppedImpacted && launchedImpacted,
     };
   }
 
-  const dropped = integrateBall(parameters, 0, time);
-  const launched = integrateBall(parameters, parameters.horizontalSpeed, time);
+  const dropped = integrateBall(parameters, { vx: 0, vy: 0 }, time);
+  const launched = integrateBall(parameters, launchVelocity, time);
 
   return {
     time: Math.min(time, Math.max(dropped.time, launched.time)),
@@ -189,18 +212,34 @@ export function impactDistance(parameters: SimulationParameters) {
 function hasValidEnvironment(parameters: SimulationParameters) {
   return (
     Number.isFinite(parameters.height) &&
+    Number.isFinite(parameters.horizontalSpeed) &&
+    Number.isFinite(parameters.launchAngle) &&
     Number.isFinite(parameters.gravity) &&
     parameters.height > 0 &&
+    parameters.horizontalSpeed >= 0 &&
     parameters.gravity > 0
   );
 }
 
-function initialState(height: number, horizontalSpeed: number): BallState {
+function getLaunchVelocity(parameters: SimulationParameters) {
+  const angle = (parameters.launchAngle * Math.PI) / 180;
+  return {
+    vx: parameters.horizontalSpeed * Math.cos(angle),
+    // BallState.vy is positive downwards, so an upward launch is negative.
+    vy: -parameters.horizontalSpeed * Math.sin(angle),
+  };
+}
+
+function initialState(
+  height: number,
+  horizontalSpeed: number,
+  verticalSpeed: number,
+): BallState {
   return {
     x: 0,
     y: height,
     vx: horizontalSpeed,
-    vy: 0,
+    vy: verticalSpeed,
   };
 }
 
@@ -260,10 +299,14 @@ function rk4Step(
 
 function integrateBall(
   parameters: SimulationParameters,
-  horizontalSpeed: number,
+  initialVelocity: Pick<BallState, "vx" | "vy">,
   requestedTime: number,
 ): IntegratedBall {
-  let state = initialState(parameters.height, horizontalSpeed);
+  let state = initialState(
+    parameters.height,
+    initialVelocity.vx,
+    initialVelocity.vy,
+  );
   let time = 0;
 
   while (state.y > 0 && time < requestedTime) {

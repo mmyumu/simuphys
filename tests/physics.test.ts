@@ -25,6 +25,31 @@ describe("moteur de chute libre", () => {
     expect(sample.dropped.x).toBe(0);
   });
 
+  it("décompose la vitesse selon l'angle de lancement", () => {
+    const angled = {
+      ...VACUUM_PARAMETERS,
+      launchAngle: 45,
+    };
+    const sample = sampleSimulation(angled, 0);
+
+    expect(sample.launched.vx).toBeCloseTo(12 / Math.sqrt(2), 6);
+    expect(sample.launched.vy).toBeCloseTo(-12 / Math.sqrt(2), 6);
+  });
+
+  it("prolonge le vol quand la balle est lancée vers le haut", () => {
+    const angled = {
+      ...VACUUM_PARAMETERS,
+      launchAngle: 45,
+    };
+    const impacts = impactTimes(angled);
+    const afterDroppedImpact = sampleSimulation(angled, 3.2);
+
+    expect(impacts.launched).toBeGreaterThan(impacts.dropped);
+    expect(afterDroppedImpact.droppedImpacted).toBe(true);
+    expect(afterDroppedImpact.launchedImpacted).toBe(false);
+    expect(afterDroppedImpact.launched.y).toBeGreaterThan(0);
+  });
+
   it("donne la même position et vitesse verticales aux deux balles", () => {
     const sample = sampleSimulation(VACUUM_PARAMETERS, 2);
     expect(sample.dropped.y).toBe(sample.launched.y);
@@ -43,6 +68,7 @@ describe("moteur de chute libre", () => {
     const invalid = {
       height: -10,
       horizontalSpeed: 4,
+      launchAngle: 0,
       gravity: 0,
       airResistance: true,
     };

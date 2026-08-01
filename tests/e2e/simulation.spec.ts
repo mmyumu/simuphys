@@ -13,6 +13,18 @@ test("lance, met en pause et réinitialise l'expérience", async ({ page }) => {
 
   await page.getByRole("button", { name: "Lancer l’expérience" }).click();
   await expect(page.getByText("En mouvement")).toBeVisible();
+
+  const elapsedTime = page
+    .locator(".metric-card")
+    .filter({ hasText: "TEMPS ÉCOULÉ" })
+    .locator(".ball-metric")
+    .first()
+    .locator("strong");
+  await expect.poll(async () => {
+    const value = (await elapsedTime.textContent()) ?? "0";
+    return Number.parseFloat(value.replace(",", "."));
+  }).toBeGreaterThan(0);
+
   await page.getByRole("button", { name: "Mettre en pause" }).click();
   await expect(page.getByText("En pause")).toBeVisible();
 
@@ -26,10 +38,21 @@ test("modifie un paramètre et applique le préréglage Terre", async ({ page })
   await page.goto("/");
   await waitForHydration(page);
   const gravity = page.getByRole("slider", { name: "Gravité" });
+  const launchAngle = page.getByRole("slider", {
+    name: "Angle de lancement",
+  });
+  const canvas = page.locator(
+    'canvas[aria-label="Animation des deux balles en chute libre"]',
+  );
+  await launchAngle.fill("45");
+  await expect(launchAngle).toHaveValue("45");
+  await expect(canvas).toHaveAttribute("data-launch-angle", "45");
+  await expect(canvas).toHaveAttribute("data-camera-mode", "isotropic");
   await gravity.fill("3.7");
   await expect(gravity).toHaveValue("3.7");
   await page.getByRole("button", { name: /Préréglage Terre/ }).click();
   await expect(gravity).toHaveValue("9.81");
+  await expect(launchAngle).toHaveValue("0");
 });
 
 test("compare la chute avec l'air et dans le vide", async ({ page }) => {

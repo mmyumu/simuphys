@@ -19,8 +19,8 @@ type Point = { x: number; y: number };
 
 const DEFAULT_IMPACT_DISTANCE =
   impactDistance(DEFAULT_PARAMETERS);
-const MAX_VISIBLE_HEIGHT = 100;
-const MIN_ILLUSTRATION_SCALE = 0.45;
+const DEFAULT_CAMERA_HEIGHT = DEFAULT_PARAMETERS.height * 1.12;
+const MIN_ILLUSTRATION_SCALE = 0.58;
 
 const COLORS = {
   ink: "#1d2433",
@@ -64,6 +64,8 @@ export function ExperimentCanvas({ parameters, time, runState }: Props) {
         ref={canvasRef}
         aria-label="Animation des deux balles en chute libre"
         data-camera-zoom={camera.zoom.toFixed(3)}
+        data-camera-mode="isotropic"
+        data-launch-angle={parameters.launchAngle}
       />
       <div className="canvas-axis axis-y">HAUTEUR (m)</div>
       <div className="canvas-axis axis-x">DISTANCE (m)</div>
@@ -89,13 +91,15 @@ function paintScene(
     MIN_ILLUSTRATION_SCALE,
     1 / camera.zoom,
   );
-  const maxDistance = Math.max(
-    impactDistance(parameters),
-    12,
+  const availableWidth = width - leftX - rightPad;
+  const availableHeight = groundY - topY;
+  const worldScale = Math.min(
+    availableWidth / camera.maxDistance,
+    availableHeight / camera.maxHeight,
   );
-  const scaleY = (groundY - topY) / MAX_VISIBLE_HEIGHT;
-  const scaleX = (width - leftX - rightPad) / maxDistance;
-  const launchY = groundY - parameters.height * scaleY;
+  const visibleDistance = availableWidth / worldScale;
+  const visibleHeight = availableHeight / worldScale;
+  const launchY = groundY - parameters.height * worldScale;
   const current = sampleSimulation(parameters, time);
 
   drawAtmosphere(ctx, width, topY, groundY);
@@ -107,8 +111,8 @@ function paintScene(
     leftX,
     groundY,
     topY,
-    MAX_VISIBLE_HEIGHT,
-    maxDistance,
+    visibleHeight,
+    visibleDistance,
   );
   drawPlatform(ctx, leftX, groundY, launchY, illustrationScale);
   drawPerson(
@@ -117,10 +121,9 @@ function paintScene(
     launchY - 13 * illustrationScale,
     illustrationScale,
   );
-
   const worldToCanvas = (point: Point): Point => ({
-    x: leftX + point.x * scaleX,
-    y: groundY - point.y * scaleY,
+    x: leftX + point.x * worldScale,
+    y: groundY - point.y * worldScale,
   });
 
   const samples = trajectorySamples(parameters, time);
@@ -144,18 +147,38 @@ function paintScene(
   const overlap =
     Math.abs(dropped.x - launched.x) < 14 * illustrationScale;
 
-  if (time > 0 && current.dropped.y > 0) {
+  if (
+    time > 0 &&
+    runState !== "finished" &&
+    !current.launchedImpacted
+  ) {
+    const launchedSpeed = Math.hypot(
+      current.launched.vx,
+      current.launched.vy,
+    );
+    const arrowLength = Math.min(58, 18 + launchedSpeed * 1.25);
     drawVelocityArrow(
       ctx,
       launched.x,
       launched.y,
-      Math.min(58, 18 + current.launched.vx * 1.25),
-      0,
+      launchedSpeed > 0
+        ? (current.launched.vx / launchedSpeed) * arrowLength
+        : 0,
+      launchedSpeed > 0
+        ? (current.launched.vy / launchedSpeed) * arrowLength
+        : 0,
       COLORS.blue,
-      `vₓ = ${current.launched.vx.toFixed(1)} m/s`,
+      `v = ${launchedSpeed.toFixed(1)} m/s`,
       "above",
       illustrationScale,
     );
+  }
+
+  if (
+    time > 0 &&
+    runState !== "finished" &&
+    !current.droppedImpacted
+  ) {
     drawVelocityArrow(
       ctx,
       dropped.x - 11,
@@ -192,6 +215,12 @@ function paintScene(
     COLORS.blueDark,
     illustrationScale,
   );
+  drawLaunchAngleIndicator(
+    ctx,
+    leftX,
+    launchY,
+    parameters.launchAngle,
+  );
 
   drawLabel(
     ctx,
@@ -218,18 +247,107 @@ function paintScene(
   ctx.fillText(`${parameters.height.toFixed(0)} m`, 27, launchY + 4);
   ctx.fillStyle = "rgba(29,36,51,.45)";
   ctx.fillText("0", 39, groundY + 4);
+  drawScaleMarker(ctx, width, topY, worldScale);
+}
+
+function drawLaunchAngleIndicator(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  angleDegrees: number,
+) {
+  const angle = (angleDegrees * Math.PI) / 180;
+  const arrowLength = 64;
+  const arrowX = Math.cos(angle) * arrowLength;
+  const arrowY = -Math.sin(angle) * arrowLength;
+  const arcRadius = 23;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  ctx.strokeStyle = "rgba(29,36,51,.38)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(72, 0);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+  ctx.strokeStyle = COLORS.blueDark;
+  ctx.fillStyle = COLORS.blueDark;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(arrowX, arrowY);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(arrowX, arrowY);
+  ctx.lineTo(
+    arrowX - 9 * Math.cos(-angle - Math.PI / 6),
+    arrowY - 9 * Math.sin(-angle - Math.PI / 6),
+  );
+  ctx.lineTo(
+    arrowX - 9 * Math.cos(-angle + Math.PI / 6),
+    arrowY - 9 * Math.sin(-angle + Math.PI / 6),
+  );
+  ctx.closePath();
+  ctx.fill();
+
+  if (angleDegrees > 0) {
+    ctx.globalAlpha = 0.75;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, arcRadius, 0, -angle, true);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  const labelX = arrowX + 8;
+  const labelY = angleDegrees >= 60 ? arrowY + 4 : arrowY - 24;
+  const label = `${angleDegrees.toFixed(0)}°`;
+  ctx.font = "700 10px system-ui, sans-serif";
+  const labelWidth = ctx.measureText(label).width;
+  ctx.fillStyle = "rgba(248,244,236,.94)";
+  ctx.strokeStyle = `${COLORS.blue}66`;
+  ctx.lineWidth = 1;
+  roundRect(ctx, labelX - 5, labelY, labelWidth + 10, 20, 5);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = COLORS.blueDark;
+  ctx.fillText(label, labelX, labelY + 14);
+
+  ctx.restore();
 }
 
 /**
- * The horizontal range controls the size of illustrative elements. It can
- * shrink them when the view expands, but never enlarges them at short ranges.
- * The tower itself uses the fixed vertical metre scale above.
+ * The camera reserves enough physical space for the complete experiment.
+ * Its single metre-to-pixel scale preserves angles and trajectory geometry.
  */
 export function getCamera(parameters: SimulationParameters) {
   const distance = impactDistance(parameters);
-  const zoom = Math.max(1, distance / DEFAULT_IMPACT_DISTANCE);
+  const angle = (parameters.launchAngle * Math.PI) / 180;
+  const upwardSpeed = parameters.horizontalSpeed * Math.sin(angle);
+  const vacuumApex =
+    parameters.height + upwardSpeed ** 2 / (2 * parameters.gravity);
+  const maxDistance = Math.max(8, distance * 1.12);
+  const maxHeight = Math.max(
+    8,
+    parameters.height + 4,
+    vacuumApex * 1.12,
+  );
+  const zoom = Math.max(
+    1,
+    maxDistance / Math.max(8, DEFAULT_IMPACT_DISTANCE * 1.12),
+    maxHeight / DEFAULT_CAMERA_HEIGHT,
+  );
 
   return {
+    maxDistance,
+    maxHeight,
     zoom,
   };
 }
@@ -361,7 +479,11 @@ function drawPlatform(
   ctx.stroke();
   ctx.globalAlpha = 0.18;
   const floorSpacing = Math.max(8, 26 * illustrationScale);
-  for (let y = topY + 36 * illustrationScale; y < groundY; y += floorSpacing) {
+  for (
+    let y = topY + 36 * illustrationScale;
+    y < groundY;
+    y += floorSpacing
+  ) {
     ctx.beginPath();
     ctx.moveTo(x - 43 * illustrationScale, y);
     ctx.lineTo(x + illustrationScale, y);
@@ -396,6 +518,48 @@ function drawPerson(
   ctx.moveTo(0, 15);
   ctx.lineTo(8, 28);
   ctx.stroke();
+  ctx.restore();
+}
+
+function drawScaleMarker(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  topY: number,
+  worldScale: number,
+) {
+  const targetMetres = 72 / worldScale;
+  const magnitude = 10 ** Math.floor(Math.log10(targetMetres));
+  const normalized = targetMetres / magnitude;
+  const multiplier = normalized <= 1 ? 1 : normalized <= 2 ? 2 : 5;
+  const unit = multiplier * magnitude;
+  const markerLength = unit * worldScale;
+  const panelWidth = Math.max(172, markerLength + 58);
+  const panelHeight = markerLength + 42;
+  const x = width - panelWidth - 18;
+  const y = topY + 8;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(248,244,236,.9)";
+  ctx.strokeStyle = "rgba(29,36,51,.18)";
+  roundRect(ctx, x, y, panelWidth, panelHeight, 6);
+  ctx.fill();
+
+  const originX = x + 18;
+  const originY = y + panelHeight - 14;
+  ctx.strokeStyle = COLORS.blueDark;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(originX, originY - markerLength);
+  ctx.lineTo(originX, originY);
+  ctx.lineTo(originX + markerLength, originY);
+  ctx.stroke();
+  ctx.fillStyle = COLORS.blueDark;
+  ctx.font = "700 9px system-ui, sans-serif";
+  ctx.fillText(`${unit} m`, originX + markerLength + 5, originY + 3);
+  ctx.fillText(`${unit} m`, originX - 6, originY - markerLength - 5);
+  ctx.fillStyle = "rgba(29,36,51,.5)";
+  ctx.font = "600 8px system-ui, sans-serif";
+  ctx.fillText("MÊME ÉCHELLE X = Y", x + 9, y + 12);
   ctx.restore();
 }
 
