@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   ASTRONOMICAL_UNIT,
   type GravitySystemState,
@@ -12,14 +17,28 @@ type Props = {
   trails: Vector2[][];
   runState: "idle" | "running" | "paused";
   viewOrigin: Vector2;
+  onBodyMove: (bodyIndex: number, position: Vector2) => void;
+};
+
+type DragState = {
+  bodyIndex: number;
+  position: Vector2;
 };
 
 const COLORS = ["#ed6938", "#3f76e4", "#715be3"] as const;
 const DARK_COLORS = ["#a83c18", "#244fa4", "#4d3cac"] as const;
 
-export function ThreeBodyCanvas({ state, trails, runState, viewOrigin }: Props) {
+export function ThreeBodyCanvas({
+  state,
+  trails,
+  runState,
+  viewOrigin,
+  onBodyMove,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const maximumRadius = useRef(0.75 * ASTRONOMICAL_UNIT);
+  const dragStateRef = useRef<DragState | null>(null);
+  const [dragState, setDragState] = useState<DragState | null>(null);
   const requiredRadius = state.bodies.reduce(
     (maximum, body) => Math.max(
       maximum,
@@ -29,6 +48,16 @@ export function ThreeBodyCanvas({ state, trails, runState, viewOrigin }: Props) 
   );
   maximumRadius.current = Math.max(maximumRadius.current, requiredRadius * 1.18);
   const viewport = { center: viewOrigin, radius: maximumRadius.current };
+  const displayedState = dragState === null
+    ? state
+    : {
+        ...state,
+        bodies: state.bodies.map((body, index) =>
+          index === dragState.bodyIndex
+            ? { ...body, position: dragState.position }
+            : body,
+        ),
+      };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -45,34 +74,105 @@ export function ThreeBodyCanvas({ state, trails, runState, viewOrigin }: Props) 
         context,
         rect.width,
         rect.height,
-        state,
+        displayedState,
         trails,
         viewport,
         runState,
       );
       canvas.dataset.gridStepAu = (gridStep / ASTRONOMICAL_UNIT).toFixed(6);
+      const scale = Math.min(rect.width, rect.height) * 0.43 / viewport.radius;
+      canvas.dataset.bodyScreenPositions = JSON.stringify(
+        displayedState.bodies.map((body) => ({
+          x: rect.width / 2 + (body.position.x - viewport.center.x) * scale,
+          y: rect.height / 2 - (body.position.y - viewport.center.y) * scale,
+        })),
+      );
     };
     draw();
     const observer = new ResizeObserver(draw);
     observer.observe(canvas);
     return () => observer.disconnect();
-  }, [runState, state, trails, viewport]);
+  }, [displayedState, runState, trails, viewport]);
+
+  const pointerPosition = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return {
+      screen: {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      },
+      rect,
+    };
+  };
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (runState === "running") return;
+    const { screen, rect } = pointerPosition(event);
+    const scale = Math.min(rect.width, rect.height) * 0.43 / viewport.radius;
+    const bodyIndex = nearestBody(state, screen, rect.width, rect.height, viewport, scale);
+    if (bodyIndex === null) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const nextDrag = { bodyIndex, position: { ...state.bodies[bodyIndex].position } };
+    dragStateRef.current = nextDrag;
+    setDragState(nextDrag);
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (dragStateRef.current === null) return;
+    const { screen, rect } = pointerPosition(event);
+    const scale = Math.min(rect.width, rect.height) * 0.43 / viewport.radius;
+    const nextDrag = {
+      bodyIndex: dragStateRef.current.bodyIndex,
+      position: {
+        x: viewport.center.x + (screen.x - rect.width / 2) / scale,
+        y: viewport.center.y - (screen.y - rect.height / 2) / scale,
+      },
+    };
+    dragStateRef.current = nextDrag;
+    setDragState(nextDrag);
+  };
+
+  const handlePointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const completedDrag = dragStateRef.current;
+    if (completedDrag === null) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    dragStateRef.current = null;
+    setDragState(null);
+    onBodyMove(completedDrag.bodyIndex, completedDrag.position);
+  };
+
+  const handlePointerCancel = () => {
+    dragStateRef.current = null;
+    setDragState(null);
+  };
 
   return (
     <div className="canvas-wrap three-body-canvas-wrap">
       <canvas
         ref={canvasRef}
-        aria-label="Simulation gravitationnelle pas à pas de deux ou trois corps"
+        aria-label="Simulation gravitationnelle pas à pas de deux ou trois corps ; corps déplaçables lorsque la simulation est arrêtée"
         data-run-state={runState}
+        data-draggable={runState === "running" ? "false" : "true"}
+        data-dragging-body={dragState === null ? "" : state.bodies[dragState.bodyIndex].id}
         data-body-count={state.bodies.length}
         data-time-days={(state.time / 86_400).toFixed(3)}
         data-camera-x-au={(viewOrigin.x / ASTRONOMICAL_UNIT).toFixed(6)}
         data-camera-y-au={(viewOrigin.y / ASTRONOMICAL_UNIT).toFixed(6)}
         data-view-radius-au={(viewport.radius / ASTRONOMICAL_UNIT).toFixed(6)}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
       />
       <div className="canvas-axis axis-y">Y • UNITÉS ASTRONOMIQUES</div>
       <div className="canvas-axis axis-x">X • UNITÉS ASTRONOMIQUES</div>
       <div className="three-body-reference-label">RÉFÉRENTIEL : CENTRE DE MASSE INITIAL</div>
+      {runState !== "running" && (
+        <div className="three-body-drag-hint">GLISSE LES CORPS POUR LES REPOSITIONNER</div>
+      )}
       <div className="three-body-canvas-key" aria-hidden="true">
         {state.bodies.map((body, index) => (
           <span key={body.id}><i style={{ borderColor: COLORS[index] }} /> {body.name}</span>
@@ -80,6 +180,28 @@ export function ThreeBodyCanvas({ state, trails, runState, viewOrigin }: Props) 
       </div>
     </div>
   );
+}
+
+function nearestBody(
+  state: GravitySystemState,
+  pointer: Vector2,
+  width: number,
+  height: number,
+  viewport: { center: Vector2; radius: number },
+  scale: number,
+) {
+  let nearest: number | null = null;
+  let nearestDistance = 24;
+  state.bodies.forEach((body, index) => {
+    const x = width / 2 + (body.position.x - viewport.center.x) * scale;
+    const y = height / 2 - (body.position.y - viewport.center.y) * scale;
+    const distance = Math.hypot(pointer.x - x, pointer.y - y);
+    if (distance < nearestDistance) {
+      nearest = index;
+      nearestDistance = distance;
+    }
+  });
+  return nearest;
 }
 
 function paintScene(

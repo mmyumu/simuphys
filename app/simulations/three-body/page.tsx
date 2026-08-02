@@ -69,6 +69,7 @@ export default function ThreeBodyPage() {
   const [playbackRate, setPlaybackRate] = useState<(typeof PLAYBACK_RATES)[number]>(50);
   const [initialEnergy, setInitialEnergy] = useState(() => totalEnergy(defaultState.bodies));
   const [configurationRevision, setConfigurationRevision] = useState(0);
+  const [viewOrigin, setViewOrigin] = useState(() => centerOfMass(defaultState.bodies));
   const animationFrame = useRef<number | null>(null);
   const lastFrame = useRef<number | null>(null);
   const accumulator = useRef(0);
@@ -77,7 +78,6 @@ export default function ThreeBodyPage() {
   const energy = totalEnergy(state.bodies);
   const energyDrift = initialEnergy === 0 ? 0 : Math.abs((energy - initialEnergy) / initialEnergy);
   const closestPair = minimumDistance(state.bodies);
-  const viewOrigin = useMemo(() => centerOfMass(initialBodies), [initialBodies]);
 
   useEffect(() => setHydrated(true), []);
 
@@ -118,7 +118,10 @@ export default function ThreeBodyPage() {
     };
   }, [playbackRate, runState, stepHours]);
 
-  const installBodies = useCallback((bodies: readonly ThreeBody[]) => {
+  const installBodies = useCallback((
+    bodies: readonly ThreeBody[],
+    options: { preserveViewport?: boolean } = {},
+  ) => {
     const next = createGravityState(bodies);
     setInitialBodies(next.bodies);
     setState(next);
@@ -126,7 +129,10 @@ export default function ThreeBodyPage() {
     setTrails(initialTrails(next.bodies));
     setInitialEnergy(totalEnergy(next.bodies));
     setRunState("idle");
-    setConfigurationRevision((current) => current + 1);
+    if (!options.preserveViewport) {
+      setViewOrigin(centerOfMass(next.bodies));
+      setConfigurationRevision((current) => current + 1);
+    }
     accumulator.current = 0;
   }, []);
 
@@ -155,7 +161,19 @@ export default function ThreeBodyPage() {
     if (field === "vx") body.velocity.x = Math.min(1_000, Math.max(-1_000, displayedValue)) * 1_000;
     if (field === "vy") body.velocity.y = Math.min(1_000, Math.max(-1_000, displayedValue)) * 1_000;
     setActivePreset(null);
-    installBodies(next);
+    installBodies(next, { preserveViewport: true });
+  };
+
+  const moveBody = (index: number, position: Vector2) => {
+    const source = state.time > 0 ? state.bodies : initialBodies;
+    const next = source.map((body) => ({
+      ...body,
+      position: { ...body.position },
+      velocity: { ...body.velocity },
+    }));
+    next[index].position = { ...position };
+    setActivePreset(null);
+    installBodies(next, { preserveViewport: true });
   };
 
   const addThirdBody = () => {
@@ -212,6 +230,7 @@ export default function ThreeBodyPage() {
             trails={trails}
             runState={runState}
             viewOrigin={viewOrigin}
+            onBodyMove={moveBody}
           />
           <div className="transport gravity-transport">
             <button className="icon-button" onClick={reset} aria-label="Revenir aux conditions initiales"><RotateCcw size={19} /></button>

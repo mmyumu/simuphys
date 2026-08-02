@@ -1968,6 +1968,15 @@ a.catalog-card:focus-visible {
   aspect-ratio: 1.35 / 1;
 }
 
+.three-body-canvas-wrap canvas[data-draggable="true"] {
+  cursor: grab;
+  touch-action: none;
+}
+
+.three-body-canvas-wrap canvas[data-dragging-body]:not([data-dragging-body=""]) {
+  cursor: grabbing;
+}
+
 .three-body-canvas-key {
   position: absolute;
   top: 12px;
@@ -1998,6 +2007,19 @@ a.catalog-card:focus-visible {
   color: rgba(29, 36, 51, 0.45);
   font: 600 7px "DM Mono", monospace;
   letter-spacing: 0.08em;
+  pointer-events: none;
+}
+
+.three-body-drag-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  padding: 5px 8px;
+  color: rgba(29, 36, 51, 0.58);
+  background: rgba(255, 253, 248, 0.82);
+  font: 600 7px "DM Mono", monospace;
+  letter-spacing: 0.08em;
+  transform: translateX(-50%);
   pointer-events: none;
 }
 

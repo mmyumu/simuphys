@@ -86,3 +86,36 @@ test("garde un référentiel fixe et dézoome quand le système dérive", async 
   await expect(canvas).toHaveAttribute("data-camera-x-au", initialCameraX!);
   await expect(canvas).toHaveAttribute("data-camera-y-au", initialCameraY!);
 });
+
+test("repositionne un corps par glisser-déposer sur le canvas", async ({ page }) => {
+  await page.goto("/simulations/three-body");
+  await waitForHydration(page);
+
+  const canvas = page.locator('canvas[aria-label^="Simulation gravitationnelle pas à pas"]');
+  const positionX = page.getByRole("spinbutton", { name: "Aster — Position X" });
+  const positionY = page.getByRole("spinbutton", { name: "Aster — Position Y" });
+  const initialX = Number(await positionX.inputValue());
+  const initialY = Number(await positionY.inputValue());
+  const initialCameraX = await canvas.getAttribute("data-camera-x-au");
+  const initialCameraY = await canvas.getAttribute("data-camera-y-au");
+  await canvas.scrollIntoViewIfNeeded();
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  const positions = JSON.parse(
+    (await canvas.getAttribute("data-body-screen-positions"))!,
+  ) as Array<{ x: number; y: number }>;
+  const startX = box!.x + positions[0].x;
+  const startY = box!.y + positions[0].y;
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 70, startY - 45, { steps: 6 });
+  await expect(canvas).toHaveAttribute("data-dragging-body", "aster");
+  await page.mouse.up();
+
+  await expect.poll(async () => Number(await positionX.inputValue())).toBeGreaterThan(initialX);
+  await expect.poll(async () => Number(await positionY.inputValue())).toBeGreaterThan(initialY);
+  await expect(canvas).toHaveAttribute("data-time-days", "0.000");
+  await expect(canvas).toHaveAttribute("data-camera-x-au", initialCameraX!);
+  await expect(canvas).toHaveAttribute("data-camera-y-au", initialCameraY!);
+});
