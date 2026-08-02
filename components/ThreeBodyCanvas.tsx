@@ -41,7 +41,16 @@ export function ThreeBodyCanvas({ state, trails, runState, viewOrigin }: Props) 
       const context = canvas.getContext("2d");
       if (!context) return;
       context.scale(ratio, ratio);
-      paintScene(context, rect.width, rect.height, state, trails, viewport, runState);
+      const gridStep = paintScene(
+        context,
+        rect.width,
+        rect.height,
+        state,
+        trails,
+        viewport,
+        runState,
+      );
+      canvas.dataset.gridStepAu = (gridStep / ASTRONOMICAL_UNIT).toFixed(6);
     };
     draw();
     const observer = new ResizeObserver(draw);
@@ -85,12 +94,14 @@ function paintScene(
   context.clearRect(0, 0, width, height);
   context.fillStyle = "#faf7f0";
   context.fillRect(0, 0, width, height);
-  drawGrid(context, width, height);
   const scale = Math.min(width, height) * 0.43 / viewport.radius;
   const project = (point: Vector2) => ({
     x: width / 2 + (point.x - viewport.center.x) * scale,
     y: height / 2 - (point.y - viewport.center.y) * scale,
   });
+  const gridStep = niceScaleStep(58 / scale);
+  drawGrid(context, width, height, viewport.center, scale, gridStep);
+  drawScaleBar(context, scale, gridStep);
 
   trails.forEach((trail, bodyIndex) => {
     if (trail.length < 2) return;
@@ -131,6 +142,7 @@ function paintScene(
   context.moveTo(center.x, center.y - 5);
   context.lineTo(center.x, center.y + 5);
   context.stroke();
+  return gridStep;
 }
 
 function drawBodyLabel(
@@ -168,19 +180,75 @@ function drawVelocityArrow(
   context.fill();
 }
 
-function drawGrid(context: CanvasRenderingContext2D, width: number, height: number) {
+function drawGrid(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  center: Vector2,
+  scale: number,
+  step: number,
+) {
   context.strokeStyle = "rgba(55, 72, 101, 0.09)";
   context.lineWidth = 1;
-  for (let x = width / 2 % 42; x < width; x += 42) {
+  const left = center.x - width / (2 * scale);
+  const right = center.x + width / (2 * scale);
+  const bottom = center.y - height / (2 * scale);
+  const top = center.y + height / (2 * scale);
+  for (let worldX = Math.ceil(left / step) * step; worldX <= right; worldX += step) {
+    const x = width / 2 + (worldX - center.x) * scale;
     context.beginPath();
     context.moveTo(x, 0);
     context.lineTo(x, height);
     context.stroke();
   }
-  for (let y = height / 2 % 42; y < height; y += 42) {
+  for (let worldY = Math.ceil(bottom / step) * step; worldY <= top; worldY += step) {
+    const y = height / 2 - (worldY - center.y) * scale;
     context.beginPath();
     context.moveTo(0, y);
     context.lineTo(width, y);
     context.stroke();
   }
+}
+
+function drawScaleBar(
+  context: CanvasRenderingContext2D,
+  scale: number,
+  step: number,
+) {
+  const barWidth = step * scale;
+  const x = 16;
+  const y = 24;
+  context.fillStyle = "rgba(255, 253, 248, 0.88)";
+  context.fillRect(8, 8, Math.max(94, barWidth + 32), 38);
+  context.strokeStyle = "rgba(29, 36, 51, 0.72)";
+  context.lineWidth = 1.5;
+  context.beginPath();
+  context.moveTo(x, y);
+  context.lineTo(x + barWidth, y);
+  context.moveTo(x, y - 4);
+  context.lineTo(x, y + 4);
+  context.moveTo(x + barWidth, y - 4);
+  context.lineTo(x + barWidth, y + 4);
+  context.stroke();
+  context.fillStyle = "rgba(29, 36, 51, 0.72)";
+  context.font = "600 8px DM Mono, monospace";
+  context.textAlign = "left";
+  context.fillText(formatScale(step), x, y + 15);
+  context.textAlign = "start";
+}
+
+function niceScaleStep(target: number) {
+  if (!Number.isFinite(target) || target <= 0) return ASTRONOMICAL_UNIT;
+  const magnitude = 10 ** Math.floor(Math.log10(target));
+  const normalized = target / magnitude;
+  const factor = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return factor * magnitude;
+}
+
+function formatScale(distance: number) {
+  const astronomicalUnits = distance / ASTRONOMICAL_UNIT;
+  if (astronomicalUnits >= 0.01) {
+    return `${astronomicalUnits.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} ua`;
+  }
+  return `${Math.round(distance / 1_000).toLocaleString("fr-FR")} km`;
 }

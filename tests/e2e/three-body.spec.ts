@@ -73,11 +73,15 @@ test("garde un référentiel fixe et dézoome quand le système dérive", async 
   const initialCameraX = await canvas.getAttribute("data-camera-x-au");
   const initialCameraY = await canvas.getAttribute("data-camera-y-au");
   const initialRadius = Number(await canvas.getAttribute("data-view-radius-au"));
+  const initialGridStep = Number(await canvas.getAttribute("data-grid-step-au"));
 
   await page.getByRole("button", { name: "Lancer la gravité" }).click();
   await expect.poll(async () =>
     Number(await canvas.getAttribute("data-view-radius-au")),
   ).toBeGreaterThan(initialRadius);
+  await expect.poll(async () =>
+    Number(await canvas.getAttribute("data-grid-step-au")),
+  ).toBeGreaterThan(initialGridStep);
 
   await expect(canvas).toHaveAttribute("data-camera-x-au", initialCameraX!);
   await expect(canvas).toHaveAttribute("data-camera-y-au", initialCameraY!);
