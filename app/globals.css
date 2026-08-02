@@ -2138,6 +2138,61 @@ a.catalog-card:focus-visible {
   font: 500 11px "DM Mono", monospace;
 }
 
+.trail-mode-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 12px;
+  color: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+}
+
+.trail-mode-control.active {
+  color: var(--white);
+  border-color: rgba(179, 167, 255, 0.58);
+  background: rgba(113, 91, 227, 0.16);
+}
+
+.trail-mode-control > span,
+.trail-mode-control strong,
+.trail-mode-control small {
+  display: block;
+}
+
+.trail-mode-control strong {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.trail-mode-control small {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.trail-mode-control input {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  accent-color: #8f7cff;
+  cursor: pointer;
+}
+
+.trail-mode-control:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.trail-mode-control input:disabled {
+  cursor: not-allowed;
+}
+
 .gravity-transport .speed-control button {
   min-width: 52px;
 }

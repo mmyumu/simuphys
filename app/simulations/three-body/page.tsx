@@ -37,6 +37,8 @@ type BodyField = "mass" | "x" | "y" | "vx" | "vy";
 
 const PRESET_IDS: ThreeBodyPresetId[] = ["binary", "close-encounter", "figure-eight"];
 const PLAYBACK_RATES = [10, 50, 200] as const;
+const TRAIL_SAMPLE_INTERVAL = 0.2 * DAY;
+const MAXIMUM_TRAIL_POINTS = 2_400;
 
 function formatNumber(value: number, digits = 2) {
   return value.toLocaleString("fr-FR", {
@@ -67,12 +69,14 @@ export default function ThreeBodyPage() {
   const [activePreset, setActivePreset] = useState<ThreeBodyPresetId | null>("binary");
   const [stepHours, setStepHours] = useState(defaultPreset.recommendedStep / 3_600);
   const [playbackRate, setPlaybackRate] = useState<(typeof PLAYBACK_RATES)[number]>(50);
+  const [keepFullTrails, setKeepFullTrails] = useState(false);
   const [initialEnergy, setInitialEnergy] = useState(() => totalEnergy(defaultState.bodies));
   const [configurationRevision, setConfigurationRevision] = useState(0);
   const [viewOrigin, setViewOrigin] = useState(() => centerOfMass(defaultState.bodies));
   const animationFrame = useRef<number | null>(null);
   const lastFrame = useRef<number | null>(null);
   const accumulator = useRef(0);
+  const lastTrailSampleTime = useRef(0);
   const stateRef = useRef(defaultState);
 
   const energy = totalEnergy(state.bodies);
@@ -97,17 +101,27 @@ export default function ThreeBodyPage() {
       accumulator.current = Math.min(accumulator.current, integrationStep * 600);
       let next = stateRef.current;
       let steps = 0;
+      const frameTrailSamples: Vector2[][] = [];
       while (accumulator.current >= integrationStep && steps < 600) {
         next = stepGravitySystem(next, integrationStep);
         accumulator.current -= integrationStep;
         steps += 1;
+        if (next.time - lastTrailSampleTime.current >= TRAIL_SAMPLE_INTERVAL) {
+          frameTrailSamples.push(next.bodies.map((body) => ({ ...body.position })));
+          lastTrailSampleTime.current = next.time;
+        }
       }
       if (steps > 0) {
         stateRef.current = next;
         setState(next);
-        setTrails((current) => next.bodies.map((body, index) => {
-          const trail = [...(current[index] ?? []), { ...body.position }];
-          return trail.length > 1_200 ? trail.slice(trail.length - 1_200) : trail;
+        setTrails((current) => next.bodies.map((_, index) => {
+          const addedPoints = frameTrailSamples
+            .map((sample) => sample[index])
+            .filter((point): point is Vector2 => point !== undefined);
+          const trail = [...(current[index] ?? []), ...addedPoints];
+          return !keepFullTrails && trail.length > MAXIMUM_TRAIL_POINTS
+            ? trail.slice(trail.length - MAXIMUM_TRAIL_POINTS)
+            : trail;
         }));
       }
       animationFrame.current = requestAnimationFrame(tick);
@@ -117,7 +131,7 @@ export default function ThreeBodyPage() {
       if (animationFrame.current !== null) cancelAnimationFrame(animationFrame.current);
       lastFrame.current = null;
     };
-  }, [playbackRate, runState, stepHours]);
+  }, [keepFullTrails, playbackRate, runState, stepHours]);
 
   const installBodies = useCallback((
     bodies: readonly ThreeBody[],
@@ -135,6 +149,7 @@ export default function ThreeBodyPage() {
       setConfigurationRevision((current) => current + 1);
     }
     accumulator.current = 0;
+    lastTrailSampleTime.current = 0;
   }, []);
 
   const reset = useCallback(() => {
@@ -265,6 +280,16 @@ export default function ThreeBodyPage() {
           <label className="step-input">
             <span>Pas de calcul Δt</span>
             <span><input type="number" min={0.01} max={48} step={0.01} value={Number(stepHours.toFixed(3))} aria-label="Pas de calcul en heures" onChange={(event) => setStepHours(Math.max(0.01, Number(event.target.value)))} /> heures</span>
+          </label>
+          <label className={`trail-mode-control${keepFullTrails ? " active" : ""}`}>
+            <span><strong>Trajectoire complète</strong><small>Conserve toute la trace depuis le lancement. La mémoire utilisée augmente avec le temps.</small></span>
+            <input
+              type="checkbox"
+              checked={keepFullTrails}
+              disabled={runState !== "idle" || state.time > 0}
+              aria-label="Garder tous les points de la trajectoire"
+              onChange={(event) => setKeepFullTrails(event.target.checked)}
+            />
           </label>
           <div className="ball-preset three-body-model-card">
             <p>IMPORTANT</p><strong>Aucune position future n’est connue</strong>

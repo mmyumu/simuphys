@@ -160,6 +160,7 @@ export function ThreeBodyCanvas({
         data-draggable={canDrag ? "true" : "false"}
         data-dragging-body={dragState === null ? "" : state.bodies[dragState.bodyIndex].id}
         data-body-count={state.bodies.length}
+        data-trail-point-count={Math.max(0, ...trails.map((trail) => trail.length))}
         data-time-days={(state.time / 86_400).toFixed(3)}
         data-camera-x-au={(viewOrigin.x / ASTRONOMICAL_UNIT).toFixed(6)}
         data-camera-y-au={(viewOrigin.y / ASTRONOMICAL_UNIT).toFixed(6)}
@@ -241,6 +242,11 @@ function paintScene(
       if (index === 0) context.moveTo(projected.x, projected.y);
       else context.lineTo(projected.x, projected.y);
     });
+    const currentPosition = state.bodies[bodyIndex]?.position;
+    if (currentPosition) {
+      const projected = project(currentPosition);
+      context.lineTo(projected.x, projected.y);
+    }
     context.stroke();
     context.globalAlpha = 1;
   });

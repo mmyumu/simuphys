@@ -108,6 +108,46 @@ test("garde un référentiel fixe et dézoome quand le système dérive", async 
   await expect(canvas).toHaveAttribute("data-camera-y-au", initialCameraY!);
 });
 
+test("échantillonne les trajectoires entre les images à vitesse élevée", async ({ page }) => {
+  await page.goto("/simulations/three-body");
+  await waitForHydration(page);
+
+  const canvas = page.locator('canvas[aria-label^="Simulation gravitationnelle pas à pas"]');
+  await page.getByRole("button", { name: "200 j/s" }).click();
+  await page.getByRole("button", { name: "Lancer la gravité" }).click();
+  await expect.poll(async () =>
+    Number(await canvas.getAttribute("data-time-days")),
+  ).toBeGreaterThan(10);
+  await page.getByRole("button", { name: "Mettre en pause" }).click();
+
+  await expect.poll(async () =>
+    Number(await canvas.getAttribute("data-trail-point-count")),
+  ).toBeGreaterThan(25);
+});
+
+test("peut conserver la trajectoire complète", async ({ page }) => {
+  await page.goto("/simulations/three-body");
+  await waitForHydration(page);
+
+  const canvas = page.locator('canvas[aria-label^="Simulation gravitationnelle pas à pas"]');
+  const fullTrailMode = page.getByRole("checkbox", {
+    name: "Garder tous les points de la trajectoire",
+  });
+  await fullTrailMode.check();
+  await page.getByRole("button", { name: "200 j/s" }).click();
+  await page.getByRole("button", { name: "Lancer la gravité" }).click();
+  await expect(fullTrailMode).toBeDisabled();
+  await expect.poll(async () =>
+    Number(await canvas.getAttribute("data-time-days")),
+    { timeout: 8_000 },
+  ).toBeGreaterThan(650);
+  await page.getByRole("button", { name: "Mettre en pause" }).click();
+
+  await expect.poll(async () =>
+    Number(await canvas.getAttribute("data-trail-point-count")),
+  ).toBeGreaterThan(2_400);
+});
+
 test("repositionne un corps par glisser-déposer sur le canvas", async ({ page }) => {
   await page.goto("/simulations/three-body");
   await waitForHydration(page);
