@@ -38,6 +38,17 @@ const simulations = [
   },
   {
     number: "03",
+    title: "Three-body problem",
+    description:
+      "Place two or three bodies, choose their masses and velocities, then let gravity determine the motion.",
+    concepts: ["Gravity", "Initial conditions", "Orbits"],
+    status: "Available",
+    href: "/simulations/three-body",
+    accent: "violet",
+    icon: Orbit,
+  },
+  {
+    number: "04",
     title: "Simple pendulum",
     description:
       "Observe how length and gravity influence the period of an oscillation.",
@@ -48,7 +59,7 @@ const simulations = [
     icon: Waves,
   },
   {
-    number: "04",
+    number: "05",
     title: "Orbital motion",
     description:
       "Explore the balance between velocity, gravitational pull and trajectory.",
@@ -59,7 +70,7 @@ const simulations = [
     icon: Orbit,
   },
   {
-    number: "05",
+    number: "06",
     title: "Collisions",
     description:
       "Vary masses and velocities to study the conservation of momentum.",
@@ -107,7 +118,7 @@ export default function Home() {
           </span>
         </a>
         <span className="catalog-count">
-          {simulations.filter((simulation) => simulation.href).length} experiment
+          {simulations.filter((simulation) => simulation.href).length} experiments
           available
         </span>
       </header>
