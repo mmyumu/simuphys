@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FallSim — Laboratoire de chute libre",
+  title: "SimuPhys — Interactive physics laboratory",
   description:
-    "Une expérience interactive pour comprendre la chute libre et le mouvement horizontal.",
+    "Explore physics through interactive simulations and hands-on experiments.",
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },

@@ -5,11 +5,14 @@ async function waitForHydration(page: import("@playwright/test").Page) {
 }
 
 test("lance, met en pause et réinitialise l'expérience", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/simulations/free-fall");
   await waitForHydration(page);
   await expect(
     page.getByRole("heading", { name: "Deux balles. Une seule gravité." }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Back to catalog" }),
+  ).toHaveAttribute("href", "/");
 
   await page.getByRole("button", { name: "Lancer l’expérience" }).click();
   await expect(page.getByText("En mouvement")).toBeVisible();
@@ -35,7 +38,7 @@ test("lance, met en pause et réinitialise l'expérience", async ({ page }) => {
 });
 
 test("déplace l'expérience depuis la barre temporelle", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/simulations/free-fall");
   await waitForHydration(page);
 
   const timeline = page.getByRole("slider", {
@@ -55,7 +58,7 @@ test("déplace l'expérience depuis la barre temporelle", async ({ page }) => {
 });
 
 test("modifie un paramètre et applique le préréglage Terre", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/simulations/free-fall");
   await waitForHydration(page);
   const gravity = page.getByRole("slider", { name: "Gravité" });
   const launchAngle = page.getByRole("slider", {
@@ -79,7 +82,7 @@ test("modifie un paramètre et applique le préréglage Terre", async ({ page })
 });
 
 test("compare la chute avec l'air et dans le vide", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/simulations/free-fall");
   await waitForHydration(page);
   const airResistance = page.getByRole("checkbox", {
     name: "Résistance de l’air",
@@ -97,7 +100,7 @@ test("compare la chute avec l'air et dans le vide", async ({ page }) => {
 });
 
 test("réduit les éléments illustratifs quand la portée augmente", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/simulations/free-fall");
   await waitForHydration(page);
   const canvas = page.locator(
     'canvas[aria-label="Animation des deux balles en chute libre"]',
