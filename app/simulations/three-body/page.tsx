@@ -78,6 +78,7 @@ export default function ThreeBodyPage() {
   const energy = totalEnergy(state.bodies);
   const energyDrift = initialEnergy === 0 ? 0 : Math.abs((energy - initialEnergy) / initialEnergy);
   const closestPair = minimumDistance(state.bodies);
+  const canDragBodies = runState === "idle" && state.time === 0;
 
   useEffect(() => setHydrated(true), []);
 
@@ -165,8 +166,7 @@ export default function ThreeBodyPage() {
   };
 
   const moveBody = (index: number, position: Vector2) => {
-    const source = state.time > 0 ? state.bodies : initialBodies;
-    const next = source.map((body) => ({
+    const next = initialBodies.map((body) => ({
       ...body,
       position: { ...body.position },
       velocity: { ...body.velocity },
@@ -229,6 +229,7 @@ export default function ThreeBodyPage() {
             state={state}
             trails={trails}
             runState={runState}
+            canDrag={canDragBodies}
             viewOrigin={viewOrigin}
             onBodyMove={moveBody}
           />

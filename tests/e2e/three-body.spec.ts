@@ -29,7 +29,28 @@ test("calcule la gravité pas à pas sans durée finale", async ({ page }) => {
 
   await page.getByRole("button", { name: "Mettre en pause" }).click();
   await expect(page.getByText("En pause", { exact: true })).toBeVisible();
+  await expect(canvas).toHaveAttribute("data-draggable", "false");
+  await expect(page.getByText("RÉINITIALISE POUR MODIFIER LES POSITIONS")).toBeVisible();
   await expect(page.getByText("Il n’existe aucune durée maximale.")).toBeVisible();
+
+  const positionX = page.getByRole("spinbutton", { name: "Aster — Position X" });
+  const pausedPositionX = await positionX.inputValue();
+  await canvas.scrollIntoViewIfNeeded();
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  const positions = JSON.parse(
+    (await canvas.getAttribute("data-body-screen-positions"))!,
+  ) as Array<{ x: number; y: number }>;
+  await page.mouse.move(box!.x + positions[0].x, box!.y + positions[0].y);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + positions[0].x + 70, box!.y + positions[0].y - 45);
+  await page.mouse.up();
+  await expect(canvas).toHaveAttribute("data-dragging-body", "");
+  await expect(positionX).toHaveValue(pausedPositionX);
+
+  await page.getByRole("button", { name: "Revenir aux conditions initiales" }).click();
+  await expect(canvas).toHaveAttribute("data-draggable", "true");
+  await expect(page.getByText("GLISSE LES CORPS POUR LES REPOSITIONNER")).toBeVisible();
 });
 
 test("construit librement un système à trois corps", async ({ page }) => {

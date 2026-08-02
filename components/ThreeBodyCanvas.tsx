@@ -16,6 +16,7 @@ type Props = {
   state: GravitySystemState;
   trails: Vector2[][];
   runState: "idle" | "running" | "paused";
+  canDrag: boolean;
   viewOrigin: Vector2;
   onBodyMove: (bodyIndex: number, position: Vector2) => void;
 };
@@ -32,6 +33,7 @@ export function ThreeBodyCanvas({
   state,
   trails,
   runState,
+  canDrag,
   viewOrigin,
   onBodyMove,
 }: Props) {
@@ -106,7 +108,7 @@ export function ThreeBodyCanvas({
   };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (runState === "running") return;
+    if (!canDrag) return;
     const { screen, rect } = pointerPosition(event);
     const scale = Math.min(rect.width, rect.height) * 0.43 / viewport.radius;
     const bodyIndex = nearestBody(state, screen, rect.width, rect.height, viewport, scale);
@@ -153,9 +155,9 @@ export function ThreeBodyCanvas({
     <div className="canvas-wrap three-body-canvas-wrap">
       <canvas
         ref={canvasRef}
-        aria-label="Simulation gravitationnelle pas à pas de deux ou trois corps ; corps déplaçables lorsque la simulation est arrêtée"
+        aria-label="Simulation gravitationnelle pas à pas de deux ou trois corps ; corps déplaçables avant le lancement"
         data-run-state={runState}
-        data-draggable={runState === "running" ? "false" : "true"}
+        data-draggable={canDrag ? "true" : "false"}
         data-dragging-body={dragState === null ? "" : state.bodies[dragState.bodyIndex].id}
         data-body-count={state.bodies.length}
         data-time-days={(state.time / 86_400).toFixed(3)}
@@ -170,8 +172,11 @@ export function ThreeBodyCanvas({
       <div className="canvas-axis axis-y">Y • UNITÉS ASTRONOMIQUES</div>
       <div className="canvas-axis axis-x">X • UNITÉS ASTRONOMIQUES</div>
       <div className="three-body-reference-label">RÉFÉRENTIEL : CENTRE DE MASSE INITIAL</div>
-      {runState !== "running" && (
+      {canDrag && (
         <div className="three-body-drag-hint">GLISSE LES CORPS POUR LES REPOSITIONNER</div>
+      )}
+      {runState === "paused" && (
+        <div className="three-body-drag-hint">RÉINITIALISE POUR MODIFIER LES POSITIONS</div>
       )}
       <div className="three-body-canvas-key" aria-hidden="true">
         {state.bodies.map((body, index) => (
