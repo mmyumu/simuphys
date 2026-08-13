@@ -1977,6 +1977,10 @@ a.catalog-card:focus-visible {
   cursor: grabbing;
 }
 
+.three-body-canvas-wrap canvas[data-drag-mode="velocity"] {
+  cursor: crosshair;
+}
+
 .three-body-canvas-key {
   position: absolute;
   top: 12px;

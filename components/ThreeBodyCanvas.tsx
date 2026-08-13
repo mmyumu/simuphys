@@ -19,15 +19,19 @@ type Props = {
   canDrag: boolean;
   viewOrigin: Vector2;
   onBodyMove: (bodyIndex: number, position: Vector2) => void;
+  onVelocityChange: (bodyIndex: number, velocity: Vector2) => void;
 };
 
-type DragState = {
-  bodyIndex: number;
-  position: Vector2;
-};
+type DragState =
+  | { kind: "position"; bodyIndex: number; position: Vector2 }
+  | { kind: "velocity"; bodyIndex: number; velocity: Vector2 };
 
 const COLORS = ["#ed6938", "#3f76e4", "#715be3"] as const;
 const DARK_COLORS = ["#a83c18", "#244fa4", "#4d3cac"] as const;
+const MAXIMUM_EDITABLE_SPEED = 1_000_000;
+const VELOCITY_ARROW_CLEARANCE = 15;
+const VELOCITY_ARROW_SCALE = 13;
+const VELOCITY_REFERENCE_SPEED = 5_000;
 
 export function ThreeBodyCanvas({
   state,
@@ -36,6 +40,7 @@ export function ThreeBodyCanvas({
   canDrag,
   viewOrigin,
   onBodyMove,
+  onVelocityChange,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const maximumRadius = useRef(0.75 * ASTRONOMICAL_UNIT);
@@ -56,7 +61,9 @@ export function ThreeBodyCanvas({
         ...state,
         bodies: state.bodies.map((body, index) =>
           index === dragState.bodyIndex
-            ? { ...body, position: dragState.position }
+            ? dragState.kind === "position"
+              ? { ...body, position: dragState.position }
+              : { ...body, velocity: dragState.velocity }
             : body,
         ),
       };
@@ -80,6 +87,7 @@ export function ThreeBodyCanvas({
         trails,
         viewport,
         runState,
+        canDrag,
       );
       canvas.dataset.gridStepAu = (gridStep / ASTRONOMICAL_UNIT).toFixed(6);
       const scale = Math.min(rect.width, rect.height) * 0.43 / viewport.radius;
@@ -89,12 +97,21 @@ export function ThreeBodyCanvas({
           y: rect.height / 2 - (body.position.y - viewport.center.y) * scale,
         })),
       );
+      canvas.dataset.velocityHandleScreenPositions = JSON.stringify(
+        displayedState.bodies.map((body) => {
+          const offset = velocityArrowOffset(body.velocity);
+          return {
+            x: rect.width / 2 + (body.position.x - viewport.center.x) * scale + offset.x,
+            y: rect.height / 2 - (body.position.y - viewport.center.y) * scale + offset.y,
+          };
+        }),
+      );
     };
     draw();
     const observer = new ResizeObserver(draw);
     observer.observe(canvas);
     return () => observer.disconnect();
-  }, [displayedState, runState, trails, viewport]);
+  }, [canDrag, displayedState, runState, trails, viewport]);
 
   const pointerPosition = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -111,11 +128,29 @@ export function ThreeBodyCanvas({
     if (!canDrag) return;
     const { screen, rect } = pointerPosition(event);
     const scale = Math.min(rect.width, rect.height) * 0.43 / viewport.radius;
+    const velocityBodyIndex = nearestVelocityHandle(
+      state,
+      screen,
+      rect.width,
+      rect.height,
+      viewport,
+      scale,
+    );
     const bodyIndex = nearestBody(state, screen, rect.width, rect.height, viewport, scale);
-    if (bodyIndex === null) return;
+    if (velocityBodyIndex === null && bodyIndex === null) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    const nextDrag = { bodyIndex, position: { ...state.bodies[bodyIndex].position } };
+    const nextDrag: DragState = velocityBodyIndex !== null
+      ? {
+          kind: "velocity",
+          bodyIndex: velocityBodyIndex,
+          velocity: { ...state.bodies[velocityBodyIndex].velocity },
+        }
+      : {
+          kind: "position",
+          bodyIndex: bodyIndex!,
+          position: { ...state.bodies[bodyIndex!].position },
+        };
     dragStateRef.current = nextDrag;
     setDragState(nextDrag);
   };
@@ -124,13 +159,25 @@ export function ThreeBodyCanvas({
     if (dragStateRef.current === null) return;
     const { screen, rect } = pointerPosition(event);
     const scale = Math.min(rect.width, rect.height) * 0.43 / viewport.radius;
-    const nextDrag = {
-      bodyIndex: dragStateRef.current.bodyIndex,
-      position: {
-        x: viewport.center.x + (screen.x - rect.width / 2) / scale,
-        y: viewport.center.y - (screen.y - rect.height / 2) / scale,
-      },
-    };
+    const currentDrag = dragStateRef.current;
+    const body = state.bodies[currentDrag.bodyIndex];
+    const nextDrag: DragState = currentDrag.kind === "position"
+      ? {
+          kind: "position",
+          bodyIndex: currentDrag.bodyIndex,
+          position: {
+            x: viewport.center.x + (screen.x - rect.width / 2) / scale,
+            y: viewport.center.y - (screen.y - rect.height / 2) / scale,
+          },
+        }
+      : {
+          kind: "velocity",
+          bodyIndex: currentDrag.bodyIndex,
+          velocity: screenOffsetToVelocity({
+            x: screen.x - (rect.width / 2 + (body.position.x - viewport.center.x) * scale),
+            y: screen.y - (rect.height / 2 - (body.position.y - viewport.center.y) * scale),
+          }),
+        };
     dragStateRef.current = nextDrag;
     setDragState(nextDrag);
   };
@@ -143,7 +190,11 @@ export function ThreeBodyCanvas({
     }
     dragStateRef.current = null;
     setDragState(null);
-    onBodyMove(completedDrag.bodyIndex, completedDrag.position);
+    if (completedDrag.kind === "position") {
+      onBodyMove(completedDrag.bodyIndex, completedDrag.position);
+    } else {
+      onVelocityChange(completedDrag.bodyIndex, completedDrag.velocity);
+    }
   };
 
   const handlePointerCancel = () => {
@@ -155,10 +206,12 @@ export function ThreeBodyCanvas({
     <div className="canvas-wrap three-body-canvas-wrap">
       <canvas
         ref={canvasRef}
-        aria-label="Simulation gravitationnelle pas à pas de deux ou trois corps ; corps déplaçables avant le lancement"
+        aria-label="Simulation gravitationnelle pas à pas de deux ou trois corps ; positions et vitesses modifiables avant le lancement"
         data-run-state={runState}
         data-draggable={canDrag ? "true" : "false"}
-        data-dragging-body={dragState === null ? "" : state.bodies[dragState.bodyIndex].id}
+        data-drag-mode={dragState?.kind ?? ""}
+        data-dragging-body={dragState?.kind === "position" ? state.bodies[dragState.bodyIndex].id : ""}
+        data-dragging-velocity-body={dragState?.kind === "velocity" ? state.bodies[dragState.bodyIndex].id : ""}
         data-body-count={state.bodies.length}
         data-trail-point-count={Math.max(0, ...trails.map((trail) => trail.length))}
         data-time-days={(state.time / 86_400).toFixed(3)}
@@ -174,7 +227,7 @@ export function ThreeBodyCanvas({
       <div className="canvas-axis axis-x">X • UNITÉS ASTRONOMIQUES</div>
       <div className="three-body-reference-label">RÉFÉRENTIEL : CENTRE DE MASSE INITIAL</div>
       {canDrag && (
-        <div className="three-body-drag-hint">GLISSE LES CORPS POUR LES REPOSITIONNER</div>
+        <div className="three-body-drag-hint">GLISSE UN CORPS • TIRE UNE POINTE POUR RÉGLER SA VITESSE</div>
       )}
       {runState === "paused" && (
         <div className="three-body-drag-hint">RÉINITIALISE POUR MODIFIER LES POSITIONS</div>
@@ -210,6 +263,29 @@ function nearestBody(
   return nearest;
 }
 
+function nearestVelocityHandle(
+  state: GravitySystemState,
+  pointer: Vector2,
+  width: number,
+  height: number,
+  viewport: { center: Vector2; radius: number },
+  scale: number,
+) {
+  let nearest: number | null = null;
+  let nearestDistance = 12;
+  state.bodies.forEach((body, index) => {
+    const offset = velocityArrowOffset(body.velocity);
+    const x = width / 2 + (body.position.x - viewport.center.x) * scale + offset.x;
+    const y = height / 2 - (body.position.y - viewport.center.y) * scale + offset.y;
+    const distance = Math.hypot(pointer.x - x, pointer.y - y);
+    if (distance < nearestDistance) {
+      nearest = index;
+      nearestDistance = distance;
+    }
+  });
+  return nearest;
+}
+
 function paintScene(
   context: CanvasRenderingContext2D,
   width: number,
@@ -218,6 +294,7 @@ function paintScene(
   trails: Vector2[][],
   viewport: { center: Vector2; radius: number },
   runState: Props["runState"],
+  canEdit: boolean,
 ) {
   context.clearRect(0, 0, width, height);
   context.fillStyle = "#faf7f0";
@@ -263,7 +340,9 @@ function paintScene(
     context.arc(point.x, point.y, radius, 0, Math.PI * 2);
     context.fill();
     drawBodyLabel(context, point, body.name, COLORS[index]);
-    if (runState !== "running") drawVelocityArrow(context, point, body.velocity, COLORS[index]);
+    if (runState !== "running") {
+      drawVelocityArrow(context, point, body.velocity, COLORS[index], canEdit);
+    }
   });
 
   const center = project(viewport.center);
@@ -295,22 +374,61 @@ function drawVelocityArrow(
   point: Vector2,
   velocity: Vector2,
   color: string,
+  canEdit: boolean,
 ) {
   const magnitude = Math.hypot(velocity.x, velocity.y);
-  if (magnitude < 1) return;
-  const length = Math.min(38, 15 + magnitude / 2_000);
-  const x = velocity.x / magnitude * length;
-  const y = -velocity.y / magnitude * length;
+  const offset = velocityArrowOffset(velocity);
+  context.save();
   context.strokeStyle = color;
-  context.fillStyle = color;
   context.lineWidth = 1.5;
+  if (magnitude < 1) {
+    context.globalAlpha = 0.55;
+    context.setLineDash([3, 3]);
+  }
   context.beginPath();
   context.moveTo(point.x, point.y);
-  context.lineTo(point.x + x, point.y + y);
+  context.lineTo(point.x + offset.x, point.y + offset.y);
   context.stroke();
+  context.setLineDash([]);
   context.beginPath();
-  context.arc(point.x + x, point.y + y, 2.5, 0, Math.PI * 2);
-  context.fill();
+  context.arc(point.x + offset.x, point.y + offset.y, canEdit ? 5 : 2.5, 0, Math.PI * 2);
+  if (canEdit) {
+    context.fillStyle = "#fffdf8";
+    context.fill();
+    context.strokeStyle = color;
+    context.lineWidth = 2;
+    context.stroke();
+  } else {
+    context.fillStyle = color;
+    context.fill();
+  }
+  context.restore();
+}
+
+function velocityArrowOffset(velocity: Vector2): Vector2 {
+  const magnitude = Math.hypot(velocity.x, velocity.y);
+  if (magnitude < 1) return { x: 22, y: 0 };
+  const length = VELOCITY_ARROW_CLEARANCE +
+    VELOCITY_ARROW_SCALE * Math.log1p(magnitude / VELOCITY_REFERENCE_SPEED);
+  return {
+    x: velocity.x / magnitude * length,
+    y: -velocity.y / magnitude * length,
+  };
+}
+
+function screenOffsetToVelocity(offset: Vector2): Vector2 {
+  const length = Math.hypot(offset.x, offset.y);
+  if (length <= VELOCITY_ARROW_CLEARANCE) return { x: 0, y: 0 };
+  const magnitude = Math.min(
+    MAXIMUM_EDITABLE_SPEED,
+    VELOCITY_REFERENCE_SPEED * Math.expm1(
+      (length - VELOCITY_ARROW_CLEARANCE) / VELOCITY_ARROW_SCALE,
+    ),
+  );
+  return {
+    x: offset.x / length * magnitude,
+    y: -offset.y / length * magnitude,
+  };
 }
 
 function drawGrid(

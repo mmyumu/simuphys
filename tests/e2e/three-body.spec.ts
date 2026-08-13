@@ -50,7 +50,9 @@ test("calcule la gravité pas à pas sans durée finale", async ({ page }) => {
 
   await page.getByRole("button", { name: "Revenir aux conditions initiales" }).click();
   await expect(canvas).toHaveAttribute("data-draggable", "true");
-  await expect(page.getByText("GLISSE LES CORPS POUR LES REPOSITIONNER")).toBeVisible();
+  await expect(
+    page.getByText("GLISSE UN CORPS • TIRE UNE POINTE POUR RÉGLER SA VITESSE"),
+  ).toBeVisible();
 });
 
 test("construit librement un système à trois corps", async ({ page }) => {
@@ -179,4 +181,38 @@ test("repositionne un corps par glisser-déposer sur le canvas", async ({ page }
   await expect(canvas).toHaveAttribute("data-time-days", "0.000");
   await expect(canvas).toHaveAttribute("data-camera-x-au", initialCameraX!);
   await expect(canvas).toHaveAttribute("data-camera-y-au", initialCameraY!);
+});
+
+test("modifie le vecteur vitesse depuis la pointe sans déplacer le corps", async ({ page }) => {
+  await page.goto("/simulations/three-body");
+  await waitForHydration(page);
+
+  const canvas = page.locator('canvas[aria-label^="Simulation gravitationnelle pas à pas"]');
+  const positionX = page.getByRole("spinbutton", { name: "Aster — Position X" });
+  const positionY = page.getByRole("spinbutton", { name: "Aster — Position Y" });
+  const velocityX = page.getByRole("spinbutton", { name: "Aster — Vitesse X" });
+  const velocityY = page.getByRole("spinbutton", { name: "Aster — Vitesse Y" });
+  const initialPositionX = await positionX.inputValue();
+  const initialPositionY = await positionY.inputValue();
+  await canvas.scrollIntoViewIfNeeded();
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  const bodies = JSON.parse(
+    (await canvas.getAttribute("data-body-screen-positions"))!,
+  ) as Array<{ x: number; y: number }>;
+  const handles = JSON.parse(
+    (await canvas.getAttribute("data-velocity-handle-screen-positions"))!,
+  ) as Array<{ x: number; y: number }>;
+
+  await page.mouse.move(box!.x + handles[0].x, box!.y + handles[0].y);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + bodies[0].x + 60, box!.y + bodies[0].y - 30, { steps: 6 });
+  await expect(canvas).toHaveAttribute("data-dragging-velocity-body", "aster");
+  await page.mouse.up();
+
+  await expect.poll(async () => Number(await velocityX.inputValue())).toBeGreaterThan(0);
+  await expect.poll(async () => Number(await velocityY.inputValue())).toBeGreaterThan(0);
+  await expect(positionX).toHaveValue(initialPositionX);
+  await expect(positionY).toHaveValue(initialPositionY);
+  await expect(canvas).toHaveAttribute("data-time-days", "0.000");
 });

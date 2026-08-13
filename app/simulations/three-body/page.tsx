@@ -191,6 +191,20 @@ export default function ThreeBodyPage() {
     installBodies(next, { preserveViewport: true });
   };
 
+  const changeBodyVelocity = (index: number, velocity: Vector2) => {
+    const next = initialBodies.map((body) => ({
+      ...body,
+      position: { ...body.position },
+      velocity: { ...body.velocity },
+    }));
+    next[index].velocity = {
+      x: Math.min(1_000_000, Math.max(-1_000_000, velocity.x)),
+      y: Math.min(1_000_000, Math.max(-1_000_000, velocity.y)),
+    };
+    setActivePreset(null);
+    installBodies(next, { preserveViewport: true });
+  };
+
   const addThirdBody = () => {
     if (initialBodies.length === 3) return;
     setActivePreset(null);
@@ -247,6 +261,7 @@ export default function ThreeBodyPage() {
             canDrag={canDragBodies}
             viewOrigin={viewOrigin}
             onBodyMove={moveBody}
+            onVelocityChange={changeBodyVelocity}
           />
           <div className="transport gravity-transport">
             <button className="icon-button" onClick={reset} aria-label="Revenir aux conditions initiales"><RotateCcw size={19} /></button>
