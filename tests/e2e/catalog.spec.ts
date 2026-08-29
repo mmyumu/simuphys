@@ -21,7 +21,12 @@ test("filters simulations and clears the search", async ({ page }) => {
     name: "Search simulations",
   });
   await search.fill("orbit");
-  await expect(page.getByRole("heading", { name: "Orbital motion" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Three-body problem" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Orbital motion" }),
+  ).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Free fall" })).toBeHidden();
 
   await search.fill("thermodynamics");

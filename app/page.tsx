@@ -60,17 +60,6 @@ const simulations = [
   },
   {
     number: "05",
-    title: "Orbital motion",
-    description:
-      "Explore the balance between velocity, gravitational pull and trajectory.",
-    concepts: ["Orbit", "Velocity", "Attraction"],
-    status: "Coming soon",
-    href: null,
-    accent: "violet",
-    icon: Orbit,
-  },
-  {
-    number: "06",
     title: "Collisions",
     description:
       "Vary masses and velocities to study the conservation of momentum.",
