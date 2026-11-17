@@ -1,0 +1,5 @@
+{"tests": ["tests.yml"],
+ "components": [
+  {"name": "Docs and tests", "deploy": "none", "paths": ["README.md", "CLAUDE.md", "normandy.json", ".gitignore", ".github/**", "compose.yml", "tests/**", "playwright.config.ts", "vitest.config.ts"]},
+  {"name": "App", "deploy": "auto", "paths": ["Dockerfile", ".dockerignore", ".openai/**", "app/**", "components/**", "lib/**", "public/**", "package.json", "pnpm-lock.yaml", "next-env.d.ts", "next.config.ts", "tsconfig.json", "vite.config.ts"], "containers": ["simuphys"]}
+ ]}
